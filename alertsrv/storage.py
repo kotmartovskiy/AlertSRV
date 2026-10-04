@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from threading import RLock
 from datetime import datetime
 from pathlib import Path
 from typing import Protocol
@@ -26,7 +27,8 @@ class SQLiteAlertStore:
 
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
-        self._db = sqlite3.connect(self.path)
+        self._lock = RLock()
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.execute("PRAGMA busy_timeout = 5000")
         self._db.executescript(
@@ -54,8 +56,9 @@ class SQLiteAlertStore:
         self._db.commit()
 
     def load_alerts(self) -> list[Alert]:
-        rows = self._db.execute("SELECT data_json FROM alerts").fetchall()
-        return [alert_from_dict(json.loads(row[0])) for row in rows]
+        with self._lock:
+            rows = self._db.execute("SELECT data_json FROM alerts").fetchall()
+            return [alert_from_dict(json.loads(row[0])) for row in rows]
 
     @staticmethod
     def _alert_json(alert: Alert) -> str:
@@ -67,7 +70,8 @@ class SQLiteAlertStore:
         )
 
     def save_alert(self, alert: Alert) -> None:
-        self._db.execute(
+        with self._lock:
+            self._db.execute(
             """
             INSERT INTO alerts(alert_id, correlation_key, state, data_json)
             VALUES (?, ?, ?, ?)
@@ -78,11 +82,11 @@ class SQLiteAlertStore:
             """,
             (alert.alert_id, alert.correlation_key, alert.state.value, self._alert_json(alert)),
         )
-        self._db.commit()
+            self._db.commit()
 
     def save_ingest(self, alert: Alert, event_key: str, received_at: datetime) -> None:
         """Persist the final alert state and its dedup index atomically."""
-        with self._db:
+        with self._lock, self._db:
             self._db.execute(
                 """
                 INSERT INTO alerts(alert_id, correlation_key, state, data_json)
@@ -103,22 +107,24 @@ class SQLiteAlertStore:
             )
 
     def event_alert_id(self, event_key: str) -> str | None:
-        row = self._db.execute(
+        with self._lock:
+            row = self._db.execute(
             "SELECT alert_id FROM event_index WHERE event_key = ?", (event_key,)
-        ).fetchone()
-        return row[0] if row else None
+            ).fetchone()
+            return row[0] if row else None
 
     def save_event_mapping(
         self, event_key: str, alert_id: str, received_at: datetime | None = None
     ) -> None:
-        self._db.execute(
+        with self._lock:
+            self._db.execute(
             """
             INSERT OR IGNORE INTO event_index(event_key, alert_id, received_at)
             VALUES (?, ?, ?)
             """,
             (event_key, alert_id, received_at.isoformat() if received_at else None),
         )
-        self._db.commit()
+            self._db.commit()
 
     def prune_event_index(self, cutoff: datetime) -> int:
         """Remove old dedup mappings only when their alert is terminal."""
@@ -129,7 +135,7 @@ class SQLiteAlertStore:
             AlertState.SUPERSEDED,
         ))
         placeholders = ",".join("?" for _ in terminal)
-        with self._db:
+        with self._lock, self._db:
             cursor = self._db.execute(
                 f"""
                 DELETE FROM event_index
@@ -145,18 +151,21 @@ class SQLiteAlertStore:
         return cursor.rowcount
 
     def load_source_health(self) -> dict[str, SourceHealth]:
-        rows = self._db.execute("SELECT source_id, health FROM source_health").fetchall()
-        return {source_id: SourceHealth(health) for source_id, health in rows}
+        with self._lock:
+            rows = self._db.execute("SELECT source_id, health FROM source_health").fetchall()
+            return {source_id: SourceHealth(health) for source_id, health in rows}
 
     def save_source_health(self, source_id: str, health: SourceHealth) -> None:
-        self._db.execute(
+        with self._lock:
+            self._db.execute(
             """
             INSERT INTO source_health(source_id, health) VALUES (?, ?)
             ON CONFLICT(source_id) DO UPDATE SET health=excluded.health
             """,
             (source_id, health.value),
         )
-        self._db.commit()
+            self._db.commit()
 
     def close(self) -> None:
-        self._db.close()
+        with self._lock:
+            self._db.close()

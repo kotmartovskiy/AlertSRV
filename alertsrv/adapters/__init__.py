@@ -1,1 +1,3 @@
-"""Input adapters for AlertSRV."""
+﻿from .mchs_rss import MchsRssAdapter
+
+__all__ = ["MchsRssAdapter"]

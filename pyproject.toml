@@ -12,3 +12,5 @@ readme = "README.md"
 
 [tool.setuptools.packages.find]
 include = ["alertsrv*"]
+[project.scripts]
+alertsrv = "alertsrv.__main__:main"
