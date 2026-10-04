@@ -1,0 +1,74 @@
+from __future__ import annotations
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+class Severity(str, Enum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+    @property
+    def rank(self) -> int:
+        return {Severity.INFO: 10, Severity.WARNING: 20, Severity.CRITICAL: 30}[self]
+
+class AlertState(str, Enum):
+    NEW = "new"
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+    SUPERSEDED = "superseded"
+
+class SourceHealth(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"
+
+@dataclass(frozen=True, slots=True)
+class NormalizedEvent:
+    event_id: str
+    source_id: str
+    event_type: str
+    title: str
+    severity: Severity
+    confidence: float
+    occurred_at: datetime
+    received_at: datetime
+    correlation_key: str
+    payload: dict[str, Any] = field(default_factory=dict)
+    expires_at: datetime | None = None
+    resolved: bool = False
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be between 0.0 and 1.0")
+        if not self.event_id or not self.source_id or not self.correlation_key:
+            raise ValueError("event_id, source_id and correlation_key are required")
+        if self.expires_at is not None and self.expires_at < self.occurred_at:
+            raise ValueError("expires_at cannot precede occurred_at")
+
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    event_id: str
+    source_id: str
+    severity: Severity
+    confidence: float
+    occurred_at: datetime
+    received_at: datetime
+    title: str
+    payload: dict[str, Any] = field(default_factory=dict)
+
+@dataclass(slots=True)
+class Alert:
+    alert_id: str
+    correlation_key: str
+    state: AlertState
+    severity: Severity
+    confidence: float
+    title: str
+    started_at: datetime
+    updated_at: datetime
+    expires_at: datetime | None = None
+    evidence: list[Evidence] = field(default_factory=list)
+    transition_history: list[tuple[AlertState, AlertState, datetime, str]] = field(default_factory=list)
