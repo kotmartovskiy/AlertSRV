@@ -3,18 +3,27 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from .keys import dedup_key
 from .models import Alert, AlertState, Evidence, NormalizedEvent, SourceHealth
+from .storage import AlertStore
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 class AlertEngine:
     """Deterministic in-memory alert aggregator."""
-    def __init__(self, *, clock=_utcnow) -> None:
+    def __init__(self, *, clock=_utcnow, store: AlertStore | None = None) -> None:
         self._clock = clock
+        self._store = store
         self._alerts: dict[str, Alert] = {}
         self._event_to_alert: dict[str, str] = {}
         self._source_health: dict[str, SourceHealth] = {}
+        if store is not None:
+            self._alerts = {alert.alert_id: alert for alert in store.load_alerts()}
+            self._source_health = store.load_source_health()
     def ingest(self, event: NormalizedEvent) -> Alert:
         event_key = dedup_key(event.event_id, event.source_id)
         existing_id = self._event_to_alert.get(event_key)
+        if existing_id is None and self._store is not None:
+            existing_id = self._store.event_alert_id(event_key)
+            if existing_id is not None:
+                self._event_to_alert[event_key] = existing_id
         if existing_id is not None:
             return self._alerts[existing_id]
         alert = self._find_correlated(event)
@@ -46,13 +55,20 @@ class AlertEngine:
                     alert.expires_at = event.expires_at
         alert.evidence.append(evidence)
         self._event_to_alert[event_key] = alert.alert_id
+        if self._store is not None:
+            self._store.save_alert(alert)
+            self._store.save_event_mapping(event_key, alert.alert_id)
         if event.resolved and alert.state == AlertState.ACTIVE:
             self._transition(alert, AlertState.RESOLVED, event.received_at, "source resolved event")
+            if self._store is not None:
+                self._store.save_alert(alert)
         return alert
     def resolve(self, alert_id: str, *, reason: str = "manual resolution") -> Alert:
         alert = self._require(alert_id)
         if alert.state == AlertState.ACTIVE:
             self._transition(alert, AlertState.RESOLVED, self._clock(), reason)
+            if self._store is not None:
+                self._store.save_alert(alert)
         return alert
     def expire(self, *, now: datetime | None = None) -> list[Alert]:
         now = now or self._clock()
@@ -60,10 +76,14 @@ class AlertEngine:
         for alert in self._alerts.values():
             if alert.state == AlertState.ACTIVE and alert.expires_at is not None and alert.expires_at <= now:
                 self._transition(alert, AlertState.EXPIRED, now, "expiration time reached")
+                if self._store is not None:
+                    self._store.save_alert(alert)
                 expired.append(alert)
         return expired
     def set_source_health(self, source_id: str, health: SourceHealth) -> None:
         self._source_health[source_id] = health
+        if self._store is not None:
+            self._store.save_source_health(source_id, health)
     def source_health(self, source_id: str) -> SourceHealth:
         return self._source_health.get(source_id, SourceHealth.UNKNOWN)
     def get(self, alert_id: str) -> Alert:

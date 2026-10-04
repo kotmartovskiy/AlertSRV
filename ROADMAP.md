@@ -17,17 +17,22 @@
 - deterministic test adapter
 - adapter/service integration tests
 
-## Phase 3 — next
+## Phase 3 — in progress
 
-Before adding real external sources:
+Completed in this phase:
 
-1. Define a stable JSON representation for events and alerts.
-2. Add a persistence interface and SQLite implementation.
-3. Add a minimal HTTP API using only the Python standard library.
-4. Add an API-level test adapter.
-5. Define source lifecycle and freshness semantics.
-6. Add tests for stale events, conflicting sources, source recovery and repeated resolution.
-7. Only then implement the first real source adapter.
+1. Stable JSON representation for alerts, including evidence and transition history.
+2. Persistence interface and SQLite implementation.
+3. Restart recovery for alerts, evidence, deduplication index and source health.
+4. Persistence tests covering restart, duplicate events and expiration.
+
+Next, before adding real external sources:
+
+5. Add a minimal HTTP API using only the Python standard library.
+6. Add an API-level test adapter.
+7. Define source lifecycle and freshness semantics.
+8. Add tests for stale events, conflicting sources, source recovery and repeated resolution.
+9. Only then implement the first real source adapter.
 
 ## Important unresolved design questions
 
@@ -45,7 +50,7 @@ The current alert severity is the maximum observed severity. This is conservativ
 
 ### Persistence
 
-The current engine is in-memory. Restarting the process loses all alerts and evidence. This is acceptable only for the development stage.
+SQLite persistence now exists behind an AlertStore interface. The engine can still run in-memory for tests, while a SQLite-backed instance restores alerts, evidence, deduplication mappings and source health after restart.
 
 ### Source outage
 
