@@ -19,6 +19,9 @@ class AlertService:
     def expire(self) -> list[Alert]:
         return self.engine.expire()
 
+    def get(self, alert_id: str) -> Alert:
+        return self.engine.get(alert_id)
+
     def active(self) -> list[Alert]:
         return self.engine.list_alerts(state=AlertState.ACTIVE)
 

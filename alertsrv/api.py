@@ -48,7 +48,7 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/v1/alerts/"):
             alert_id = path.rsplit("/", 1)[-1]
             try:
-                alert = self.service.engine.get(alert_id)
+                alert = self.service.get(alert_id)
             except KeyError:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
                 return
