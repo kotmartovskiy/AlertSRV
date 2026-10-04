@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 
 from .api import create_server
@@ -13,12 +13,13 @@ from .service import AlertService
 from .storage import SQLiteAlertStore
 from .adapters.mchs_catalog import MchsRegionalCatalog
 from .adapters.mchs_rss import GENERAL_RSS_TEMPLATE, MchsRssAdapter
+from .adapters.rosgidromet import RosgidrometEmergencyAdapter
 
 log = logging.getLogger("alertsrv")
 
 
-def poll_once(service: AlertService, adapters: list[MchsRssAdapter], workers: int = 8) -> None:
-    def fetch(adapter: MchsRssAdapter) -> tuple[str, list, bool]:
+def poll_once(service: AlertService, adapters: list[object], workers: int = 8) -> None:
+    def fetch(adapter: object) -> tuple[str, list, bool]:
         try:
             return adapter.source_id, adapter.fetch(), True
         except Exception:
@@ -39,7 +40,7 @@ def poll_once(service: AlertService, adapters: list[MchsRssAdapter], workers: in
     service.expire()
 
 
-def run_poller(service: AlertService, adapters: list[MchsRssAdapter], interval: float, workers: int, stop: threading.Event) -> None:
+def run_poller(service: AlertService, adapters: list[object], interval: float, workers: int, stop: threading.Event) -> None:
     while not stop.wait(interval):
         poll_once(service, adapters, workers)
 
@@ -56,8 +57,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     store = SQLiteAlertStore(args.db)
     service = AlertService(AlertEngine(store=store))
+
     if args.regions == "ivanovo":
-        adapters = [MchsRssAdapter()]
+        adapters: list[object] = [MchsRssAdapter()]
     else:
         regions = MchsRegionalCatalog().discover()
         adapters = [
@@ -68,10 +70,16 @@ def main() -> None:
             )
             for region in regions
         ]
-        log.info("discovered %d official regional MChS sites", len(adapters))
+        adapters.append(RosgidrometEmergencyAdapter())
+        log.info("discovered %d official regional MChS sites plus Rosgidromet", len(adapters) - 1)
+
     stop = threading.Event()
     poll_once(service, adapters, args.workers)
-    poller = threading.Thread(target=run_poller, args=(service, adapters, args.interval, args.workers, stop), daemon=True)
+    poller = threading.Thread(
+        target=run_poller,
+        args=(service, adapters, args.interval, args.workers, stop),
+        daemon=True,
+    )
     poller.start()
     server: ThreadingHTTPServer = create_server(service, host=args.host, port=args.port)
     log.info("AlertSRV listening on %s:%d", args.host, server.server_port)

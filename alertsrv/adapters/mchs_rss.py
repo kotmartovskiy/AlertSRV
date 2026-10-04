@@ -106,6 +106,11 @@ class MchsRssAdapter:
                 occurred_at=received_at,
                 received_at=received_at,
                 correlation_key=f"{self.source_id}:{stable_id}",
-                payload={"url": link, "text_html": full_text},
+                payload={
+                    "url": link,
+                    "text_html": full_text,
+                    "region_code": self.source_id.removeprefix("mchs-"),
+                    "scope": "region",
+                },
                 expires_at=_title_expiry(title, received_at.tzinfo),
             )
