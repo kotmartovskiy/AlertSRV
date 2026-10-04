@@ -14,6 +14,7 @@ from .storage import SQLiteAlertStore
 from .adapters.mchs_catalog import MchsRegionalCatalog
 from .adapters.mchs_rss import GENERAL_RSS_TEMPLATE, MchsRssAdapter
 from .adapters.ivanovo_operational_hq import IvanovoOperationalHQAdapter
+from .adapters.ivanovo_veterinary import IvanovoVeterinaryRegistryAdapter
 from .adapters.rosgidromet import RosgidrometEmergencyAdapter
 
 log = logging.getLogger("alertsrv")
@@ -60,7 +61,11 @@ def main() -> None:
     service = AlertService(AlertEngine(store=store))
 
     if args.regions == "ivanovo":
-        adapters: list[object] = [MchsRssAdapter(), IvanovoOperationalHQAdapter()]
+        adapters: list[object] = [
+            MchsRssAdapter(),
+            IvanovoOperationalHQAdapter(),
+            IvanovoVeterinaryRegistryAdapter(),
+        ]
     else:
         regions = MchsRegionalCatalog().discover()
         adapters = [
@@ -73,7 +78,8 @@ def main() -> None:
         ]
         adapters.append(RosgidrometEmergencyAdapter())
         adapters.append(IvanovoOperationalHQAdapter())
-        log.info("discovered %d official regional MChS sites plus Rosgidromet", len(adapters) - 2)
+        adapters.append(IvanovoVeterinaryRegistryAdapter())
+        log.info("discovered %d official regional MChS sites plus Rosgidromet", len(adapters) - 3)
 
     stop = threading.Event()
     poll_once(service, adapters, args.workers)
