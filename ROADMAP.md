@@ -25,14 +25,15 @@ Completed in this phase:
 2. Persistence interface and SQLite implementation.
 3. Restart recovery for alerts, evidence, deduplication index and source health.
 4. Persistence tests covering restart, duplicate events and expiration.
+5. Minimal HTTP API using only the Python standard library.
+6. API-level tests for health, listing, detail and 404 behavior.
 
 Next, before adding real external sources:
 
-5. Add a minimal HTTP API using only the Python standard library.
-6. Add an API-level test adapter.
-7. Define source lifecycle and freshness semantics.
-8. Add tests for stale events, conflicting sources, source recovery and repeated resolution.
-9. Only then implement the first real source adapter.
+7. Add an API-level test adapter for event ingestion.
+8. Define source lifecycle and freshness semantics.
+9. Add tests for stale events, conflicting sources, source recovery and repeated resolution.
+10. Only then implement the first real source adapter.
 
 ## Important unresolved design questions
 

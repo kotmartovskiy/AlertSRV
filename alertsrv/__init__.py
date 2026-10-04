@@ -1,6 +1,13 @@
-"""AlertSRV core package."""
+"""AlertSRV — local-first alert aggregation service."""
 
-from .engine import AlertEngine
-from .models import Alert, AlertState, Evidence, NormalizedEvent, Severity, SourceHealth
+from .models import Alert, AlertState, NormalizedEvent, Severity, SourceHealth
+from .service import AlertService
 
-__all__ = ["Alert", "AlertEngine", "AlertState", "Evidence", "NormalizedEvent", "Severity", "SourceHealth"]
+__all__ = [
+    "Alert",
+    "AlertState",
+    "AlertService",
+    "NormalizedEvent",
+    "Severity",
+    "SourceHealth",
+]
