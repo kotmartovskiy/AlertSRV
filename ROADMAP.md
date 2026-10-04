@@ -1,6 +1,6 @@
 # AlertSRV roadmap
 
-## Phase 1 — core (done)
+## Phase 1 — core — done
 
 - NormalizedEvent
 - Alert model
@@ -11,52 +11,124 @@
 - state transitions
 - deterministic tests
 
-## Phase 2 — service boundary (done)
+## Phase 2 — service boundary — done
 
 - AlertService facade
 - deterministic test adapter
 - adapter/service integration tests
 
-## Phase 3 — in progress
+## Phase 3 — persistence and API — mostly done
 
-Completed in this phase:
+Completed:
 
 1. Stable JSON representation for alerts, including evidence and transition history.
 2. Persistence interface and SQLite implementation.
 3. Restart recovery for alerts, evidence, deduplication index and source health.
 4. Persistence tests covering restart, duplicate events and expiration.
 5. Minimal HTTP API using only the Python standard library.
-6. API-level tests for health, listing, detail and 404 behavior.
+6. API tests for health, listing, detail and 404 behavior.
+7. HTTP event ingestion through `POST /api/v1/events`.
+8. API tests for event creation, idempotent duplicate ingestion and invalid payloads.
+9. Documentation updated to reflect the implemented architecture and API.
 
-Next, before adding real external sources:
+Remaining in this phase:
 
-7. Add an API-level test adapter for event ingestion.
-8. Define source lifecycle and freshness semantics.
-9. Add tests for stale events, conflicting sources, source recovery and repeated resolution.
-10. Only then implement the first real source adapter.
+10. Define source lifecycle and freshness semantics.
+11. Add tests for stale events, future events, conflicting sources, source recovery and repeated resolution.
+12. Harden persistence transaction boundaries and define retention/cleanup policy.
+13. Add a stable API contract document once the semantics stop changing.
 
-## Important unresolved design questions
+## Phase 4 — first real source
+
+Only after lifecycle/freshness semantics are stable:
+
+1. Select one real source.
+2. Implement a dedicated source adapter.
+3. Keep raw-source parsing isolated from the core.
+4. Map source observations into NormalizedEvent.
+5. Define source-specific reliability and freshness policy.
+6. Add fixture-based tests for real source responses.
+7. Test source failure, malformed data, empty data and schema changes.
+
+## Phase 5 — aggregation policy
+
+After real-source behavior is understood:
+
+- source reliability model;
+- evidence weighting;
+- confidence aggregation;
+- contradictory-source handling;
+- temporal/geographic correlation;
+- supersession;
+- alert expiration policy;
+- event/alert retention.
+
+## Phase 6 — outputs
+
+Only after the aggregation core is stable:
+
+- LAN Discovery API integration;
+- local UI;
+- notification adapters;
+- optional Telegram/push/etc.;
+- notification deduplication and delivery state.
+
+## Important architectural rules
+
+### Source failure is not alert resolution
+
+A source becoming unavailable must not silently transition an alert to RESOLVED.
+
+### Severity and confidence are independent
+
+A critical event with low confidence and a warning with high confidence are different situations and must remain distinguishable.
+
+### Source is not alert
+
+Multiple source observations can contribute evidence to one logical alert.
+
+### Core remains deterministic
+
+External I/O belongs in adapters. Aggregation rules should be testable without network access.
+
+### Do not add real sources too early
+
+The first real adapter should validate an already-defined lifecycle rather than define the lifecycle accidentally.
+
+## Open design questions
 
 ### Correlation
 
-The current `correlation_key` is supplied by an adapter. This is intentional: automatic geographic/text correlation is a later subsystem and must not be hidden inside the core.
+How should geographic, temporal and textual similarity contribute to correlation without causing unrelated alerts to merge?
 
 ### Confidence
 
-The current engine retains the maximum observed confidence. This is a temporary deterministic policy, not a statistical confidence model. A future aggregator should be able to use source reliability and evidence weighting.
+How should source reliability and evidence quality affect confidence without pretending that the result is a calibrated probability?
 
 ### Severity
 
-The current alert severity is the maximum observed severity. This is conservative but may need a policy layer for contradictory or stale observations.
+How should contradictory severity reports be resolved when a weak source reports CRITICAL and a highly reliable source reports INFO?
+
+### Freshness
+
+When does an observation become stale? Does staleness affect evidence, source health, alert state, or all three?
 
 ### Persistence
 
-SQLite persistence now exists behind an AlertStore interface. The engine can still run in-memory for tests, while a SQLite-backed instance restores alerts, evidence, deduplication mappings and source health after restart.
+The current SQLite store is sufficient for the vertical slice but needs transactional ingest semantics and retention policy before production use.
 
-### Source outage
+### Source health
 
-A source becoming unavailable never resolves an alert. Resolution must come from an explicit source event, an expiration rule, or an operator/system policy.
+What exact state transitions and timestamps define HEALTHY, DEGRADED and UNAVAILABLE?
 
-## Non-goals for the current stage
+## Current non-goals
 
-Do not add notification channels, Telegram, push, scraping of arbitrary websites, or a complex UI before the state model and persistence semantics are stable.
+Do not add:
+
+- notification channels;
+- Telegram/push;
+- arbitrary website scraping;
+- complex UI;
+- automatic semantic correlation;
+
+until the event lifecycle and persistence semantics are sufficiently specified and tested.
