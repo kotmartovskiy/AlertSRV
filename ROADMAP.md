@@ -33,8 +33,8 @@ Completed:
 
 Remaining in this phase:
 
-10. Define source lifecycle and freshness semantics.
-11. Add tests for stale events, future events, conflicting sources, source recovery and repeated resolution.
+10. Define source lifecycle and freshness semantics. **Partially done:** configurable event freshness classification now exists; source-health timestamps and source lifecycle policy remain.
+11. Add tests for stale events, future events, conflicting sources, source recovery and repeated resolution. **In progress:** stale/future and conflicting-source behavior are covered; source recovery and repeated-resolution coverage remain to be expanded.
 12. Harden persistence transaction boundaries and define retention/cleanup policy.
 13. Add a stable API contract document once the semantics stop changing.
 

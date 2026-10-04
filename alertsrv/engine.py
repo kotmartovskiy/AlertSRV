@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
+from .freshness import Freshness, FreshnessPolicy
 from uuid import uuid4
 from .keys import dedup_key
 from .models import Alert, AlertState, Evidence, NormalizedEvent, SourceHealth
@@ -8,9 +9,10 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 class AlertEngine:
     """Deterministic in-memory alert aggregator."""
-    def __init__(self, *, clock=_utcnow, store: AlertStore | None = None) -> None:
+    def __init__(self, *, clock=_utcnow, store: AlertStore | None = None, freshness: FreshnessPolicy | None = None) -> None:
         self._clock = clock
         self._store = store
+        self._freshness = freshness or FreshnessPolicy()
         self._alerts: dict[str, Alert] = {}
         self._event_to_alert: dict[str, str] = {}
         self._source_health: dict[str, SourceHealth] = {}
@@ -26,6 +28,11 @@ class AlertEngine:
                 self._event_to_alert[event_key] = existing_id
         if existing_id is not None:
             return self._alerts[existing_id]
+        freshness = self._freshness.classify(event, now=self._clock())
+        if freshness == Freshness.FUTURE:
+            raise ValueError("event received_at is too far in the future")
+        if freshness == Freshness.STALE:
+            raise ValueError("event received_at is too old")
         alert = self._find_correlated(event)
         evidence = Evidence(event_id=event.event_id, source_id=event.source_id,
             severity=event.severity, confidence=event.confidence, occurred_at=event.occurred_at,

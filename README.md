@@ -168,18 +168,17 @@ This is conservative and may later become a policy layer for contradictory, stal
 
 ### Freshness
 
-Freshness semantics are not finalized yet.
+Event timing is now classified by an explicit `FreshnessPolicy`. The policy is configurable because different sources can have different acceptable ages.
 
-The next development stage will define how the service handles:
+The current classifications are:
 
-- stale events;
-- future-dated events;
-- repeated old observations;
-- source silence;
-- source recovery;
-- conflicting observations;
-- repeated resolution;
-- expiration.
+- `FRESH` — usable by the aggregation engine;
+- `STALE` — older than the configured maximum age;
+- `FUTURE` — received later than the configured future-skew allowance.
+
+By default no age limits are imposed. When limits are configured, stale and excessively future-dated events are rejected before they can create or modify alerts. This prevents an old observation from resurrecting an alert and prevents clock/source errors from becoming active evidence.
+
+Freshness is deliberately separate from source health and alert state. Source silence still does not resolve an alert, and recovery still requires a new usable observation.
 
 ### Source health
 
