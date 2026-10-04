@@ -31,6 +31,24 @@ class AlertEngineTests(unittest.TestCase):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a"))
         engine.set_source_health("weather-a", SourceHealth.UNAVAILABLE)
         self.assertEqual(engine.source_health("weather-a"), SourceHealth.UNAVAILABLE); self.assertEqual(alert.state, AlertState.ACTIVE)
+
+    def test_source_recovery_is_independent_from_alert_state(self):
+        engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a"))
+        engine.set_source_health("weather-a", SourceHealth.UNAVAILABLE)
+        engine.set_source_health("weather-a", SourceHealth.HEALTHY)
+        self.assertEqual(engine.source_health("weather-a"), SourceHealth.HEALTHY)
+        self.assertEqual(alert.state, AlertState.ACTIVE)
+        recovered = engine.ingest(event("2", "weather-a", received_offset=5))
+        self.assertIs(recovered, alert)
+        self.assertEqual(len(alert.evidence), 2)
+
+    def test_repeated_resolution_is_idempotent(self):
+        engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a"))
+        first = engine.resolve(alert.alert_id, reason="operator")
+        second = engine.resolve(alert.alert_id, reason="operator again")
+        self.assertIs(first, second)
+        self.assertEqual(alert.state, AlertState.RESOLVED)
+        self.assertEqual(len(alert.transition_history), 2)
     def test_expiration_is_explicit(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a", expires_offset=10))
         self.assertEqual(engine.expire(now=T0 + timedelta(minutes=9)), [])
