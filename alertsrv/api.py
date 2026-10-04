@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -71,12 +72,12 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
                     title=str(data.get("title", "")),
                     severity=Severity(data["severity"]),
                     confidence=float(data["confidence"]),
-                    occurred_at=__import__("datetime").datetime.fromisoformat(data["occurred_at"]),
-                    received_at=__import__("datetime").datetime.fromisoformat(data["received_at"]),
+                    occurred_at=datetime.fromisoformat(data["occurred_at"]),
+                    received_at=datetime.fromisoformat(data["received_at"]),
                     correlation_key=str(data["correlation_key"]),
                     payload=dict(data.get("payload", {})),
                     expires_at=(
-                        __import__("datetime").datetime.fromisoformat(data["expires_at"])
+                        datetime.fromisoformat(data["expires_at"])
                         if data.get("expires_at") else None
                     ),
                     resolved=bool(data.get("resolved", False)),
