@@ -144,7 +144,9 @@ The store currently persists:
 
 The engine can also run without a store for deterministic unit tests.
 
-Persistence is not yet considered production-hardened. In particular, multi-step ingest persistence and retention/cleanup policies still need explicit transactional and lifecycle design.
+Ingest persistence is transactional: the final alert state and its event-to-alert dedup mapping are committed together. This prevents a crash from leaving an alert persisted without the corresponding dedup index entry. The event index records `received_at` and supports retention cleanup. Cleanup removes old mappings only when their alerts are terminal (`RESOLVED`, `EXPIRED`, `CANCELLED` or `SUPERSEDED`); active-alert mappings are retained. Existing databases are migrated by adding the optional timestamp column when needed.
+
+Persistence is still intentionally simple and is not yet considered fully production-hardened. SQLite concurrency, transaction recovery and retention are now explicitly tested, but schema evolution, operational backup/repair and broader lifecycle policies remain future work.
 
 ## Design policies
 

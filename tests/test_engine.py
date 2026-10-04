@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from alertsrv.engine import AlertEngine
 from alertsrv.models import AlertState, NormalizedEvent, Severity, SourceHealth
@@ -67,5 +68,13 @@ class AlertEngineTests(unittest.TestCase):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a", received_offset=10))
         engine.ingest(event("2", "weather-b", received_offset=5))
         self.assertEqual(alert.updated_at, T0 + timedelta(minutes=10))
+
+    def test_concurrent_duplicate_ingest_is_idempotent(self):
+        engine = AlertEngine()
+        incoming = event("parallel-1", "weather-a")
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(engine.ingest, [incoming] * 32))
+        self.assertEqual(len({alert.alert_id for alert in results}), 1)
+        self.assertEqual(len(results[0].evidence), 1)
 if __name__ == "__main__":
     unittest.main()

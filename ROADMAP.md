@@ -34,8 +34,8 @@ Completed:
 Remaining in this phase:
 
 10. Define source lifecycle and freshness semantics. **Partially done:** configurable event freshness classification now exists; source-health timestamps and source lifecycle policy remain.
-11. Add tests for stale events, future events, conflicting sources, source recovery and repeated resolution. **In progress:** stale/future and conflicting-source behavior are covered; source recovery and repeated-resolution coverage remain to be expanded.
-12. Harden persistence transaction boundaries and define retention/cleanup policy.
+11. Add tests for stale events, future events, conflicting sources, source recovery and repeated resolution. **Mostly done:** stale/future, source recovery and repeated resolution are covered; concurrency/idempotence is also tested. True contradictory-source policy remains a future aggregation-policy task.
+12. Harden persistence transaction boundaries and define retention/cleanup policy. **Done for the current vertical slice:** ingest is atomic, event-index timestamps are retained, terminal-only cleanup is implemented, and transaction/retention behavior is tested.
 13. Add a stable API contract document once the semantics stop changing.
 
 ## Phase 4 — first real source
@@ -115,7 +115,7 @@ When does an observation become stale? Does staleness affect evidence, source he
 
 ### Persistence
 
-The current SQLite store is sufficient for the vertical slice but needs transactional ingest semantics and retention policy before production use.
+The current SQLite store now has transactional ingest and terminal-only event-index retention. Remaining production work includes operational backup/repair, schema migration discipline, and broader lifecycle/retention policy decisions.
 
 ### Source health
 
