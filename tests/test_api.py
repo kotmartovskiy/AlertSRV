@@ -83,7 +83,33 @@ class APITests(unittest.TestCase):
         with self.assertRaises(HTTPError) as ctx:
             self.request("POST", "/api/v1/events", {"event_id": "broken"})
         self.assertEqual(ctx.exception.code, 400)
-        self.assertEqual(json.load(ctx.exception), {"error": "source_id"})
+        self.assertEqual(json.load(ctx.exception), {"error": "missing field: source_id"})
+
+    def test_rejects_naive_datetime(self):
+        source = event("naive", "weather-a")
+        payload = {
+            "event_id": source.event_id, "source_id": source.source_id, "event_type": source.event_type,
+            "title": source.title, "severity": source.severity.value, "confidence": source.confidence,
+            "occurred_at": source.occurred_at.replace(tzinfo=None).isoformat(),
+            "received_at": source.received_at.isoformat(), "correlation_key": source.correlation_key,
+        }
+        with self.assertRaises(HTTPError) as ctx:
+            self.request("POST", "/api/v1/events", payload)
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertIn("timezone", json.load(ctx.exception)["error"])
+
+    def test_rejects_non_object_payload(self):
+        source = event("payload", "weather-a")
+        payload = {
+            "event_id": source.event_id, "source_id": source.source_id, "event_type": source.event_type,
+            "title": source.title, "severity": source.severity.value, "confidence": source.confidence,
+            "occurred_at": source.occurred_at.isoformat(), "received_at": source.received_at.isoformat(),
+            "correlation_key": source.correlation_key, "payload": ["bad"],
+        }
+        with self.assertRaises(HTTPError) as ctx:
+            self.request("POST", "/api/v1/events", payload)
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertEqual(json.load(ctx.exception), {"error": "payload must be an object"})
 
     def test_unknown_alert_returns_404(self):
         with self.assertRaises(HTTPError) as ctx:

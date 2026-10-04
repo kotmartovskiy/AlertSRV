@@ -11,6 +11,38 @@ from .serialization import alert_to_dict
 from .service import AlertService
 
 
+def _parse_event(data: dict) -> NormalizedEvent:
+    required = ("event_id", "source_id", "event_type", "severity", "confidence", "occurred_at", "received_at", "correlation_key")
+    for key in required:
+        if key not in data:
+            raise ValueError(f"missing field: {key}")
+    string_fields = ("event_id", "source_id", "event_type", "title", "correlation_key")
+    for key in string_fields:
+        if key in data and not isinstance(data[key], str):
+            raise ValueError(f"{key} must be a string")
+    if "payload" in data and not isinstance(data["payload"], dict):
+        raise ValueError("payload must be an object")
+    if "resolved" in data and not isinstance(data["resolved"], bool):
+        raise ValueError("resolved must be a boolean")
+    try:
+        confidence = data["confidence"]
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+            raise ValueError("confidence must be a number")
+        occurred_at = datetime.fromisoformat(data["occurred_at"])
+        received_at = datetime.fromisoformat(data["received_at"])
+        expires_at = datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") is not None else None
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid datetime or confidence: {exc}") from exc
+    if occurred_at.tzinfo is None or received_at.tzinfo is None or (expires_at is not None and expires_at.tzinfo is None):
+        raise ValueError("datetimes must include timezone information")
+    return NormalizedEvent(
+        event_id=data["event_id"], source_id=data["source_id"], event_type=data["event_type"],
+        title=data.get("title", ""), severity=Severity(data["severity"]), confidence=float(confidence),
+        occurred_at=occurred_at, received_at=received_at, correlation_key=data["correlation_key"],
+        payload=data.get("payload", {}), expires_at=expires_at, resolved=data.get("resolved", False),
+    )
+
+
 class AlertAPIHandler(BaseHTTPRequestHandler):
     service: AlertService | None = None
 
@@ -65,23 +97,7 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/events":
             try:
                 data = self._read_json()
-                event = NormalizedEvent(
-                    event_id=str(data["event_id"]),
-                    source_id=str(data["source_id"]),
-                    event_type=str(data["event_type"]),
-                    title=str(data.get("title", "")),
-                    severity=Severity(data["severity"]),
-                    confidence=float(data["confidence"]),
-                    occurred_at=datetime.fromisoformat(data["occurred_at"]),
-                    received_at=datetime.fromisoformat(data["received_at"]),
-                    correlation_key=str(data["correlation_key"]),
-                    payload=dict(data.get("payload", {})),
-                    expires_at=(
-                        datetime.fromisoformat(data["expires_at"])
-                        if data.get("expires_at") else None
-                    ),
-                    resolved=bool(data.get("resolved", False)),
-                )
+                event = _parse_event(data)
                 alert = self.service.accept(event)
                 self._send_json(HTTPStatus.OK, alert_to_dict(alert))
             except KeyError as exc:
