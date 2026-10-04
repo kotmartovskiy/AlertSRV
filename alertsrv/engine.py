@@ -196,6 +196,8 @@ class AlertEngine:
         event_region = event.payload.get("region_code")
         event_scope = event.payload.get("scope")
         event_hazard = event.payload.get("hazard_class") or classify_hazard(event.title, event_type=event.event_type)
+        event_category = event.payload.get("category")
+        event_subtype = event.payload.get("subtype")
         if event_scope != "region" or not event_region:
             return None
 
@@ -210,6 +212,12 @@ class AlertEngine:
                 if payload.get("scope") != "region" or payload.get("region_code") != event_region:
                     continue
                 hazard = payload.get("hazard_class") or classify_hazard(evidence.title)
+                category = payload.get("category")
+                subtype = payload.get("subtype")
+                if event_category and category and category != event_category:
+                    continue
+                if event_subtype and subtype and subtype != event_subtype:
+                    continue
                 if hazard != event_hazard:
                     continue
                 delta = abs((evidence.occurred_at - event.occurred_at).total_seconds())

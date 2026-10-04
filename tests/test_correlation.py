@@ -8,7 +8,7 @@ UTC = timezone.utc
 T0 = datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
 
 
-def event(event_id, source_id, *, region="37", hazard="wind", scope="region", minutes=0):
+def event(event_id, source_id, *, region="37", hazard="wind", category="weather", subtype="wind", scope="region", minutes=0):
     at = T0 + timedelta(minutes=minutes)
     return NormalizedEvent(
         event_id=event_id,
@@ -20,7 +20,7 @@ def event(event_id, source_id, *, region="37", hazard="wind", scope="region", mi
         occurred_at=at,
         received_at=at,
         correlation_key=f"{source_id}:{event_id}",
-        payload={"region_code": region, "scope": scope, "hazard_class": hazard},
+        payload={"region_code": region, "scope": scope, "hazard_class": hazard, "category": category, "subtype": subtype},
     )
 
 
@@ -36,6 +36,12 @@ class CorrelationTests(unittest.TestCase):
         engine = AlertEngine()
         first = engine.ingest(event("1", "mchs-37", hazard="wind"))
         second = engine.ingest(event("2", "ros-37", hazard="heavy_rain", minutes=30))
+        self.assertIsNot(first, second)
+
+    def test_different_semantic_categories_do_not_correlate(self):
+        engine = AlertEngine()
+        first = engine.ingest(event("1", "mchs-37", hazard="other", category="weather", subtype="other"))
+        second = engine.ingest(event("2", "ros-37", hazard="other", category="air_threat", subtype="drone_warning", minutes=30))
         self.assertIsNot(first, second)
 
     def test_different_regions_do_not_correlate(self):

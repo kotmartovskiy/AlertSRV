@@ -1,4 +1,4 @@
-﻿# AlertSRV roadmap
+# AlertSRV roadmap
 
 ## Current milestone: real warning service
 
@@ -12,26 +12,62 @@ Completed:
 - general operational RSS fallback when a dedicated warning RSS endpoint is unavailable;
 - warning validity-date expiration extraction;
 - source-health reporting;
-- runnable local runtime and Linux/systemd deployment unit.
+- runnable local runtime and Linux/systemd deployment unit;
+- official Rosgidromet national emergency-information adapter;
+- regional scope and hazard classification;
+- conservative cross-source regional correlation;
+- region filtering in the HTTP API;
+- initial public-safety taxonomy for air threats, emergency regimes and quarantine.
 
-Current verified state on the Lenovo test host:
+Current verified state:
 
-- 37 automated tests pass;
+- 46 automated tests pass before the current taxonomy test expansion;
 - official MChS catalog resolves 89 regional sites including Moscow;
-- a full national poll was executed with 8 concurrent workers;
-- 727 RSS observations were ingested during the full poll test;
-- historical observations were transitioned to EXPIRED according to parsed validity dates;
-- the API remained localhost-only during runtime tests;
-- no project data outside temporary test databases was modified.
+- national MChS polling and Rosgidromet live fetches were previously verified;
+- official Ivanovo sources were verified for drone-danger warnings and all-clear messages;
+- official Ivanovo civil-defense material was verified for missile-danger signaling;
+- official Ivanovo government/veterinary publications were verified for quarantine and emergency-regime information;
+- API remains localhost-only during runtime tests;
+- tests use temporary/local state and do not modify user data.
+
+## Public safety scope
+
+AlertSRV is intended to expose more than meteorological warnings:
+
+1. weather and hydrology;
+2. drone danger;
+3. missile danger;
+4. civil-defense/public-warning signals;
+5. high-readiness and emergency-situation regimes;
+6. extraordinary/emergency legal regimes where an authoritative source explicitly reports them;
+7. quarantine:
+   - human/public health;
+   - animal/veterinary;
+   - plant/phytosanitary;
+8. epidemiological situations;
+9. evacuation and movement restrictions;
+10. major infrastructure disruptions.
+
+The semantic taxonomy is documented in docs/PUBLIC_SAFETY_TAXONOMY.md.
 
 ## Next work
 
-1. Improve regional source semantics and coverage for the regions whose feeds expose warnings only through non-standard mechanisms.
-2. Add independent weather/meteorological sources so MChS warnings are corroborated rather than treated as the only weather evidence.
-3. Add regional civil-defense / public warning sources where officially available.
-4. Implement cross-source geographic/temporal correlation and contradiction policy.
-5. Add notification delivery state and a notification adapter (Telegram/local webhook first).
-6. Add a small local UI for active warnings and source health.
-7. Add operational retention, backup/repair and schema migration procedures.
+1. Add a dedicated Ivanovo official operational-headquarters adapter for drone/missile danger and explicit all-clear events.
+2. Add a regional-government source catalog so the same adapter pattern can be extended beyond Ivanovo.
+3. Add official veterinary/quarantine source adapters and preserve the exact affected municipality/settlement.
+4. Add a dedicated Rosgidromet hydrology adapter with structured water-body/observation-point data.
+5. Extend geographic representation from region_code to a structured affected_area hierarchy:
+   federal -> region -> municipality -> settlement -> local_area.
+6. Add contradiction and cancellation semantics for safety-critical warnings.
+7. Add notification delivery state and adapters.
+8. Add a small local UI showing active warnings by selected region and municipality.
+9. Add operational retention, backup/repair and schema migration procedures.
+10. Add broader national source coverage only after each source family has deterministic tests.
 
-The national MChS adapter is deliberately not the final aggregation layer: it is one evidence source. The target service should combine independent sources before assigning high confidence to a logical alert.
+## Safety-critical source policy
+
+Air-threat alerts must preserve original wording, publication time, source URL/channel, geographic scope, and explicit cancellation/all-clear. Source silence never resolves an air-threat alert.
+
+Unofficial reports may be useful as corroborating evidence in the future, but cannot automatically become high-confidence alerts.
+
+The national service must distinguish raw observations from logical threats: one event can have multiple independent pieces of evidence, and one source can report many observations about the same underlying threat.
