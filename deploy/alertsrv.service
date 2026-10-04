@@ -1,0 +1,22 @@
+﻿[Unit]
+Description=AlertSRV local alert aggregation service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alertsrv
+Group=alertsrv
+WorkingDirectory=/opt/alertsrv
+ExecStart=/usr/bin/python3 -m alertsrv --db /var/lib/alertsrv/alertsrv.sqlite3 --host 127.0.0.1 --port 8090 --regions all --workers 8 --interval 900
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=alertsrv
+ReadWritePaths=/var/lib/alertsrv
+
+[Install]
+WantedBy=multi-user.target

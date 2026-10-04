@@ -38,6 +38,23 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body, {"status": "ok"})
 
+    def test_list_alerts_by_state_and_sources(self):
+        source = event("state-filter", "weather-a")
+        payload = {
+            "event_id": source.event_id, "source_id": source.source_id, "event_type": source.event_type,
+            "title": source.title, "severity": source.severity.value, "confidence": source.confidence,
+            "occurred_at": source.occurred_at.isoformat(), "received_at": source.received_at.isoformat(),
+            "correlation_key": source.correlation_key,
+        }
+        with self.request("POST", "/api/v1/events", payload):
+            pass
+        status, active = self.get("/api/v1/alerts?state=active")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(active["alerts"]), 1)
+        status, sources = self.get("/api/v1/sources")
+        self.assertEqual(status, 200)
+        self.assertEqual(sources["sources"], {})
+
     def test_post_event_then_get_alert(self):
         source = event("1", "weather-a")
         payload = {

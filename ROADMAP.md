@@ -1,134 +1,37 @@
-# AlertSRV roadmap
+﻿# AlertSRV roadmap
 
-## Phase 1 — core — done
-
-- NormalizedEvent
-- Alert model
-- evidence history
-- source health
-- deduplication
-- correlation
-- state transitions
-- deterministic tests
-
-## Phase 2 — service boundary — done
-
-- AlertService facade
-- deterministic test adapter
-- adapter/service integration tests
-
-## Phase 3 — persistence and API — mostly done
+## Current milestone: real warning service
 
 Completed:
 
-1. Stable JSON representation for alerts, including evidence and transition history.
-2. Persistence interface and SQLite implementation.
-3. Restart recovery for alerts, evidence, deduplication index and source health.
-4. Persistence tests covering restart, duplicate events and expiration.
-5. Minimal HTTP API using only the Python standard library.
-6. API tests for health, listing, detail and 404 behavior.
-7. HTTP event ingestion through `POST /api/v1/events`.
-8. API tests for event creation, idempotent duplicate ingestion and invalid payloads.
-9. Documentation updated to reflect the implemented architecture and API.
+- deterministic core lifecycle and persistence;
+- strict normalized-event HTTP contract;
+- official Ivanovo MChS warning adapter;
+- official regional MChS catalog discovery;
+- national MChS polling mode;
+- general operational RSS fallback when a dedicated warning RSS endpoint is unavailable;
+- warning validity-date expiration extraction;
+- source-health reporting;
+- runnable local runtime and Linux/systemd deployment unit.
 
-Remaining in this phase:
+Current verified state on the Lenovo test host:
 
-10. Define source lifecycle and freshness semantics. **Partially done:** configurable event freshness classification now exists; source-health timestamps and source lifecycle policy remain.
-11. Add tests for stale events, future events, conflicting sources, source recovery and repeated resolution. **Mostly done:** stale/future, source recovery and repeated resolution are covered; concurrency/idempotence is also tested. True contradictory-source policy remains a future aggregation-policy task.
-12. Harden persistence transaction boundaries and define retention/cleanup policy. **Done for the current vertical slice:** ingest is atomic, event-index timestamps are retained, terminal-only cleanup is implemented, and transaction/retention behavior is tested.
-13. Add a stable API contract document once the semantics stop changing.
+- 37 automated tests pass;
+- official MChS catalog resolves 89 regional sites including Moscow;
+- a full national poll was executed with 8 concurrent workers;
+- 727 RSS observations were ingested during the full poll test;
+- historical observations were transitioned to EXPIRED according to parsed validity dates;
+- the API remained localhost-only during runtime tests;
+- no project data outside temporary test databases was modified.
 
-## Phase 4 — first real source
+## Next work
 
-Only after lifecycle/freshness semantics are stable:
+1. Improve regional source semantics and coverage for the regions whose feeds expose warnings only through non-standard mechanisms.
+2. Add independent weather/meteorological sources so MChS warnings are corroborated rather than treated as the only weather evidence.
+3. Add regional civil-defense / public warning sources where officially available.
+4. Implement cross-source geographic/temporal correlation and contradiction policy.
+5. Add notification delivery state and a notification adapter (Telegram/local webhook first).
+6. Add a small local UI for active warnings and source health.
+7. Add operational retention, backup/repair and schema migration procedures.
 
-1. Select one real source.
-2. Implement a dedicated source adapter.
-3. Keep raw-source parsing isolated from the core.
-4. Map source observations into NormalizedEvent.
-5. Define source-specific reliability and freshness policy.
-6. Add fixture-based tests for real source responses.
-7. Test source failure, malformed data, empty data and schema changes.
-
-## Phase 5 — aggregation policy
-
-After real-source behavior is understood:
-
-- source reliability model;
-- evidence weighting;
-- confidence aggregation;
-- contradictory-source handling;
-- temporal/geographic correlation;
-- supersession;
-- alert expiration policy;
-- event/alert retention.
-
-## Phase 6 — outputs
-
-Only after the aggregation core is stable:
-
-- LAN Discovery API integration;
-- local UI;
-- notification adapters;
-- optional Telegram/push/etc.;
-- notification deduplication and delivery state.
-
-## Important architectural rules
-
-### Source failure is not alert resolution
-
-A source becoming unavailable must not silently transition an alert to RESOLVED.
-
-### Severity and confidence are independent
-
-A critical event with low confidence and a warning with high confidence are different situations and must remain distinguishable.
-
-### Source is not alert
-
-Multiple source observations can contribute evidence to one logical alert.
-
-### Core remains deterministic
-
-External I/O belongs in adapters. Aggregation rules should be testable without network access.
-
-### Do not add real sources too early
-
-The first real adapter should validate an already-defined lifecycle rather than define the lifecycle accidentally.
-
-## Open design questions
-
-### Correlation
-
-How should geographic, temporal and textual similarity contribute to correlation without causing unrelated alerts to merge?
-
-### Confidence
-
-How should source reliability and evidence quality affect confidence without pretending that the result is a calibrated probability?
-
-### Severity
-
-How should contradictory severity reports be resolved when a weak source reports CRITICAL and a highly reliable source reports INFO?
-
-### Freshness
-
-When does an observation become stale? Does staleness affect evidence, source health, alert state, or all three?
-
-### Persistence
-
-The current SQLite store now has transactional ingest and terminal-only event-index retention. Remaining production work includes operational backup/repair, schema migration discipline, and broader lifecycle/retention policy decisions.
-
-### Source health
-
-What exact state transitions and timestamps define HEALTHY, DEGRADED and UNAVAILABLE?
-
-## Current non-goals
-
-Do not add:
-
-- notification channels;
-- Telegram/push;
-- arbitrary website scraping;
-- complex UI;
-- automatic semantic correlation;
-
-until the event lifecycle and persistence semantics are sufficiently specified and tested.
+The national MChS adapter is deliberately not the final aggregation layer: it is one evidence source. The target service should combine independent sources before assigning high confidence to a logical alert.

@@ -14,6 +14,20 @@ def test_mchs_rss_fixture(tmp_path):
     assert event.payload["url"].endswith("5836623")
 
 
+def test_general_feed_fallback_fixture():
+    from xml.etree import ElementTree
+    root = ElementTree.Element("rss")
+    channel = ElementTree.SubElement(root, "channel")
+    for title, link in (("Storm warning", "https://10.mchs.gov.ru/x/1"), ("Operational forecast", "https://10.mchs.gov.ru/x/2")):
+        item = ElementTree.SubElement(channel, "item")
+        ElementTree.SubElement(item, "title").text = title
+        ElementTree.SubElement(item, "pubDate").text = "Sun, 04 Oct 26 12:12:00 +0300"
+        ElementTree.SubElement(item, "link").text = link
+    adapter = MchsRssAdapter(source_id="mchs-10", general_fallback_url="https://10.mchs.gov.ru/general/rss")
+    events = list(adapter._parse(root, warnings_only=True))
+    assert len(events) == 1
+    assert events[0].title == "Storm warning"
+
 def test_mchs_rss_live_smoke():
     # Explicit live smoke test is opt-in so the normal suite remains offline/deterministic.
     import os
@@ -21,3 +35,13 @@ def test_mchs_rss_live_smoke():
         return
     events = MchsRssAdapter().fetch()
     assert events
+
+
+def test_title_expiry_parsing():
+    from alertsrv.adapters.mchs_rss import _MONTHS, _title_expiry
+    from datetime import timezone
+    month = lambda number: next(name for name, value in _MONTHS.items() if value == number)
+    tz = timezone.utc
+    assert _title_expiry(f"Warning 04 - 05 {month(10)} 2026", tz).day == 5
+    assert _title_expiry(f"Warning 30 {month(9)} - 01 {month(10)} 2026", tz).month == 10
+    assert _title_expiry(f"Warning 17 {month(9)} 2026", tz).day == 17

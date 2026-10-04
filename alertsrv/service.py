@@ -22,8 +22,14 @@ class AlertService:
     def get(self, alert_id: str) -> Alert:
         return self.engine.get(alert_id)
 
+    def sources(self) -> dict[str, object]:
+        return self.engine.source_health_all()
+
     def active(self) -> list[Alert]:
         return self.engine.list_alerts(state=AlertState.ACTIVE)
 
     def all(self) -> list[Alert]:
         return self.engine.list_alerts()
+
+    def list(self, state: AlertState | None = None) -> list[Alert]:
+        return self.engine.list_alerts(state=state)

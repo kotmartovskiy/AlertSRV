@@ -21,3 +21,13 @@ The next source layer should become a regional MChS source registry. It should d
 
 This gives a practical route from one region to broad Russian coverage without duplicating one adapter per region.
 
+
+## National coverage
+
+The regional catalog is built from the federal MChS directory of territorial bodies rather than from a hand-maintained list. The current directory exposes 89 official regional sites, including the Moscow site. The catalog deduplicates regional codes and maps the Moscow host to code 77.
+
+The runtime polls the warning RSS feed for each region. If the dedicated warning RSS endpoint returns HTTP 404, it falls back to the regional general operational RSS and keeps only items whose titles indicate a warning/storm. A region with a reachable feed but no current warning items remains `HEALTHY`; an unreachable source becomes `UNAVAILABLE`.
+
+This is deliberately a source-coverage mechanism, not a claim that every regional feed has identical semantics. Some regional sites publish warnings only through their general operational feed, and some may currently have no warning items.
+
+Historical RSS entries are not treated as indefinitely active alerts: when a warning title contains a validity date/range, the adapter derives an expiration at the end of the stated final date.

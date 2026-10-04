@@ -7,6 +7,8 @@ The API is a local integration boundary. It accepts already-normalized events; s
 - `GET /health` -> `200 {"status":"ok"}`
 - `GET /api/v1/alerts` -> `200 {"alerts":[...]}`
 - `GET /api/v1/alerts/<id>` -> alert or `404`
+- `GET /api/v1/alerts?state=active` -> filtered alert list
+- `GET /api/v1/sources` -> source health map
 - `POST /api/v1/events` -> accepted alert or `400` for invalid input
 - `POST /api/v1/alerts/expire` -> applies configured expiration and returns expired alerts
 

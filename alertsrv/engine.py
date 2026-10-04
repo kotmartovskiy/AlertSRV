@@ -164,6 +164,10 @@ class AlertEngine:
         with self._lock:
             return self._source_health.get(source_id, SourceHealth.UNKNOWN)
 
+    def source_health_all(self) -> dict[str, SourceHealth]:
+        with self._lock:
+            return dict(self._source_health)
+
     def get(self, alert_id: str) -> Alert:
         with self._lock:
             return self._require(alert_id)

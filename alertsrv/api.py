@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .models import NormalizedEvent, Severity
 from .serialization import alert_to_dict
@@ -70,13 +70,26 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
         if self.service is None:
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "service unavailable"})
             return
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
             return
         if path == "/api/v1/alerts":
-            alerts = self.service.all()
+            state = parse_qs(parsed.query).get("state", [None])[0]
+            if state is None:
+                alerts = self.service.all()
+            else:
+                try:
+                    from .models import AlertState
+                    alerts = self.service.list(AlertState(state))
+                except ValueError:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid state"})
+                    return
             self._send_json(HTTPStatus.OK, {"alerts": [alert_to_dict(a) for a in alerts]})
+            return
+        if path == "/api/v1/sources":
+            self._send_json(HTTPStatus.OK, {"sources": {k: v.value for k, v in self.service.sources().items()}})
             return
         if path.startswith("/api/v1/alerts/"):
             alert_id = path.rsplit("/", 1)[-1]
