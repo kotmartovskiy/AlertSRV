@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 import re
 
+from ..hazards import classify_hazard
 from ..models import NormalizedEvent, Severity
 
 GENERAL_RSS_TEMPLATE = (
@@ -111,6 +112,7 @@ class MchsRssAdapter:
                     "text_html": full_text,
                     "region_code": self.source_id.removeprefix("mchs-"),
                     "scope": "region",
+                    "hazard_class": classify_hazard(f"{title} {full_text}", event_type="weather.emergency_warning"),
                 },
                 expires_at=_title_expiry(title, received_at.tzinfo),
             )

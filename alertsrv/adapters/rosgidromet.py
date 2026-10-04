@@ -6,6 +6,7 @@ import hashlib
 import re
 from urllib.request import Request, urlopen
 
+from ..hazards import classify_hazard
 from ..models import NormalizedEvent, Severity
 
 DEFAULT_EMERGENCY_URL = "https://www.meteorf.gov.ru/product/emergency/"
@@ -79,7 +80,7 @@ class RosgidrometEmergencyAdapter:
                 occurred_at=occurred_at,
                 received_at=datetime.now(timezone.utc),
                 correlation_key=f"{self.source_id}:{stable}",
-                payload={"url": self.url, "text": body, "scope": "russia"},
+                payload={"url": self.url, "text": body, "scope": "russia", "hazard_class": classify_hazard(body, event_type="weather.emergency_national")},
             ))
         return events
 

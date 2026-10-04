@@ -128,6 +128,24 @@ class APITests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 400)
         self.assertEqual(json.load(ctx.exception), {"error": "payload must be an object"})
 
+    def test_region_filter(self):
+        source = event("region-filter", "mchs-37")
+        payload = {
+            "event_id": source.event_id, "source_id": source.source_id, "event_type": source.event_type,
+            "title": source.title, "severity": source.severity.value, "confidence": source.confidence,
+            "occurred_at": source.occurred_at.isoformat(), "received_at": source.received_at.isoformat(),
+            "correlation_key": source.correlation_key,
+            "payload": {"scope": "region", "region_code": "37", "hazard_class": "wind"},
+        }
+        with self.request("POST", "/api/v1/events", payload):
+            pass
+        status, body = self.get("/api/v1/alerts?region=37")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body["alerts"]), 1)
+        status, body = self.get("/api/v1/alerts?region=76")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["alerts"], [])
+
     def test_unknown_alert_returns_404(self):
         with self.assertRaises(HTTPError) as ctx:
             self.request("GET", "/api/v1/alerts/not-found")

@@ -5,6 +5,7 @@ from threading import RLock
 from uuid import uuid4
 
 from .freshness import Freshness, FreshnessPolicy
+from .hazards import classify_hazard
 from .keys import dedup_key
 from .models import Alert, AlertState, Evidence, NormalizedEvent, SourceHealth
 from .storage import AlertStore
@@ -185,7 +186,37 @@ class AlertEngine:
             for a in self._alerts.values()
             if a.correlation_key == event.correlation_key and a.state == AlertState.ACTIVE
         ]
-        return max(candidates, key=lambda a: a.updated_at) if candidates else None
+        if candidates:
+            return max(candidates, key=lambda a: a.updated_at)
+
+        # Cross-source correlation is deliberately conservative. It requires
+        # explicit regional scope, the same normalized hazard class, a short
+        # temporal distance, and different source identities. National events
+        # therefore cannot be silently attached to a particular region.
+        event_region = event.payload.get("region_code")
+        event_scope = event.payload.get("scope")
+        event_hazard = event.payload.get("hazard_class") or classify_hazard(event.title, event_type=event.event_type)
+        if event_scope != "region" or not event_region:
+            return None
+
+        matches: list[Alert] = []
+        for alert in self._alerts.values():
+            if alert.state != AlertState.ACTIVE:
+                continue
+            for evidence in reversed(alert.evidence):
+                if evidence.source_id == event.source_id:
+                    continue
+                payload = evidence.payload
+                if payload.get("scope") != "region" or payload.get("region_code") != event_region:
+                    continue
+                hazard = payload.get("hazard_class") or classify_hazard(evidence.title)
+                if hazard != event_hazard:
+                    continue
+                delta = abs((evidence.occurred_at - event.occurred_at).total_seconds())
+                if delta <= 6 * 3600:
+                    matches.append(alert)
+                    break
+        return max(matches, key=lambda a: a.updated_at) if matches else None
 
     @staticmethod
     def _transition(alert: Alert, new_state: AlertState, at: datetime, reason: str) -> None:

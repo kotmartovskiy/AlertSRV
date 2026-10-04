@@ -76,7 +76,9 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"status": "ok"})
             return
         if path == "/api/v1/alerts":
-            state = parse_qs(parsed.query).get("state", [None])[0]
+            query = parse_qs(parsed.query)
+            state = query.get("state", [None])[0]
+            region = query.get("region", [None])[0]
             if state is None:
                 alerts = self.service.all()
             else:
@@ -86,6 +88,14 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
                 except ValueError:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid state"})
                     return
+            if region is not None:
+                if not region:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid region"})
+                    return
+                alerts = [
+                    a for a in alerts
+                    if any(e.payload.get("scope") == "region" and e.payload.get("region_code") == region for e in a.evidence)
+                ]
             self._send_json(HTTPStatus.OK, {"alerts": [alert_to_dict(a) for a in alerts]})
             return
         if path == "/api/v1/sources":
