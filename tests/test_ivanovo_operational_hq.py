@@ -84,6 +84,32 @@ class IvanovoOperationalHQTests(unittest.TestCase):
         self.assertEqual(events[0].payload["subtype"], "missile_warning")
         self.assertFalse(events[0].resolved)
 
+    def test_explicit_local_time_keeps_moscow_timezone_semantics(self):
+        html = """<html><head><title>Информация оперативного штаба Ивановской области</title>
+        <meta name="description" content="Обновление по состоянию на 06:33: Опасность БПЛА в Ивановской области.">
+        </head></html>"""
+        events = parse_operational_page(
+            html,
+            url="https://ivanovoobl.ru/?id=77123&type=news",
+            observed_at=datetime(2026, 10, 5, 3, 40, tzinfo=UTC),
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].occurred_at, datetime(2026, 10, 5, 3, 33, tzinfo=UTC))
+
+    def test_sitemap_index_reads_all_child_sitemaps(self):
+        class FakeAdapter(IvanovoOperationalHQAdapter):
+            def _fetch(self, url):
+                if url == "https://example.test/index.xml":
+                    return b"""<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><sitemap><loc>https://example.test/a.xml</loc></sitemap><sitemap><loc>https://example.test/b.xml</loc></sitemap></sitemapindex>"""
+                return {
+                    "https://example.test/a.xml": b"""<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.test/old</loc><lastmod>2099-01-01T00:00:00+00:00</lastmod></url></urlset>""",
+                    "https://example.test/b.xml": b"""<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.test/new</loc><lastmod>2099-01-02T00:00:00+00:00</lastmod></url></urlset>""",
+                }[url]
+
+        adapter = FakeAdapter("https://example.test/index.xml")
+        rows = adapter._sitemap_urls()
+        self.assertEqual([url for url, _ in rows], ["https://example.test/new", "https://example.test/old"])
+
     def test_adapter_exposes_source_id(self):
         adapter = IvanovoOperationalHQAdapter()
         self.assertEqual(adapter.source_id, "ivanovo-operational-hq")

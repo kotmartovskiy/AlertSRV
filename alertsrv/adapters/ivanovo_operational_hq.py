@@ -55,7 +55,8 @@ def _parse_time(text: str, fallback: datetime) -> datetime:
     if not match:
         return fallback
     hour, minute = map(int, match.group(1).split(":"))
-    return fallback.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    local = fallback.astimezone(IVANOVO.timezone)
+    return local.replace(hour=hour, minute=minute, second=0, microsecond=0).astimezone(fallback.tzinfo)
 
 
 def _classification(text: str) -> tuple[str, str, bool] | None:
@@ -168,25 +169,27 @@ class IvanovoOperationalHQAdapter:
     def _sitemap_urls(self) -> list[tuple[str, datetime]]:
         root = ElementTree.fromstring(self._fetch(self.sitemap_url))
         namespace = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
-        sitemap = root.find(f"{namespace}sitemap")
-        if sitemap is not None:
-            loc = sitemap.findtext(f"{namespace}loc")
-            if loc:
-                root = ElementTree.fromstring(self._fetch(loc))
+        sitemap_locs = [
+            loc.text.strip()
+            for loc in root.findall(f"{namespace}sitemap/{namespace}loc")
+            if loc.text and loc.text.strip()
+        ]
+        roots = [ElementTree.fromstring(self._fetch(loc)) for loc in sitemap_locs] if sitemap_locs else [root]
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=self.scan_days)
         rows: list[tuple[str, datetime]] = []
-        for item in root.findall(f"{namespace}url"):
-            loc = item.findtext(f"{namespace}loc")
-            lastmod = item.findtext(f"{namespace}lastmod")
-            if not loc or not lastmod:
-                continue
-            try:
-                timestamp = datetime.fromisoformat(lastmod.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            if timestamp >= cutoff:
-                rows.append((loc, timestamp))
+        for sitemap_root in roots:
+            for item in sitemap_root.findall(f"{namespace}url"):
+                loc = item.findtext(f"{namespace}loc")
+                lastmod = item.findtext(f"{namespace}lastmod")
+                if not loc or not lastmod:
+                    continue
+                try:
+                    timestamp = datetime.fromisoformat(lastmod.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if timestamp >= cutoff:
+                    rows.append((loc, timestamp))
 
         rows.sort(key=lambda row: row[1], reverse=True)
         return rows[: self.max_candidates]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,10 +18,21 @@ class RegionalGovernmentSource:
     base_url: str
     operational_sitemap_url: str
     source_id: str
+    local_timezone: str
+
+    @property
+    def timezone(self) -> ZoneInfo:
+        return ZoneInfo(self.local_timezone)
 
     def __post_init__(self) -> None:
         if not self.region_code or not self.region_name or not self.source_id:
             raise ValueError("region_code, region_name and source_id are required")
+        if not self.local_timezone:
+            raise ValueError("local_timezone is required")
+        try:
+            ZoneInfo(self.local_timezone)
+        except Exception as exc:
+            raise ValueError("local_timezone must be a valid IANA timezone") from exc
         for field_name in ("base_url", "operational_sitemap_url"):
             value = getattr(self, field_name)
             parsed = urlparse(value)
@@ -34,6 +46,7 @@ IVANOVO = RegionalGovernmentSource(
     base_url="https://ivanovoobl.ru/",
     operational_sitemap_url="https://ivanovoobl.ru/sitemap.xml",
     source_id="ivanovo-operational-hq",
+    local_timezone="Europe/Moscow",
 )
 
 
