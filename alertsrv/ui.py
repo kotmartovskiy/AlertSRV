@@ -203,6 +203,105 @@ ul {{margin:0;padding-left:20px;color:var(--muted);font-size:13px}} .timeline-it
 </main></body></html>"""
 
 
+def render_source_detail_page(service: AlertService, scheduler, region_code: str, source_id: str) -> str:
+    configured = {
+        (item.region_code, item.source_id): item
+        for item in scheduler.enabled_sources()
+    }
+    key = (region_code, source_id)
+    spec = configured.get(key)
+    if spec is None:
+        raise KeyError(key)
+
+    history = scheduler.history(region_code, source_id)
+    health = service.sources().get(source_id)
+    health_value = getattr(health, "value", str(health or "unknown"))
+    results = scheduler.last_results()
+    latest = results.get(key)
+    region_name = REGION_NAMES.get(region_code, f"Регион {region_code}")
+
+    health_labels = {
+        "healthy": "Здоров", "degraded": "Деградация",
+        "unavailable": "Недоступен", "unknown": "Нет данных",
+    }
+    status_labels = {
+        "success": "Успешно", "empty": "Пусто", "stale": "Устарело",
+        "degraded": "Деградация", "unavailable": "Недоступен",
+    }
+    source_spec = next(
+        (
+            candidate
+            for region in scheduler.regions
+            if region.region_code == region_code
+            for candidate in region.sources
+            if candidate.source_id == source_id
+        ),
+        None,
+    )
+    categories = ", ".join(sorted(source_spec.categories)) if source_spec else "—"
+
+    history_rows = []
+    for entry in history:
+        result = entry.result
+        error = escape(result.error or "—")
+        history_rows.append(
+            f"""<tr>
+              <td>{escape(entry.completed_at.astimezone().strftime("%d.%m.%Y %H:%M:%S"))}</td>
+              <td><span class="status {escape(result.status.value)}">{escape(status_labels.get(result.status.value, result.status.value))}</span></td>
+              <td>{escape(getattr(result.health, "value", str(result.health)))}</td>
+              <td>{result.event_count}</td>
+              <td>{entry.duration_seconds * 1000:.0f} мс</td>
+              <td class="error">{error}</td>
+            </tr>"""
+        )
+    history_html = "".join(history_rows) or (
+        '<tr><td colspan="6" class="empty-cell">Опросов ещё не было.</td></tr>'
+    )
+    latest_status = (
+        status_labels.get(latest.status.value, latest.status.value)
+        if latest else "Ещё не опрашивался"
+    )
+    latest_duration = (
+        f"{history[0].duration_seconds * 1000:.0f} мс" if history else "—"
+    )
+    latest_error = escape(latest.error or "—") if latest else "—"
+
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AlertSRV — {escape(source_id)}</title>
+<style>
+:root {{--bg:#f5f7fa;--panel:#fff;--text:#111827;--muted:#64748b;--line:#e2e8f0;--ok:#15803d;--warn:#b45309;--bad:#dc2626;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}}
+* {{box-sizing:border-box}} body {{margin:0;background:var(--bg);color:var(--text)}} main {{max-width:1120px;margin:auto;padding:26px 18px 50px}}
+.back {{display:inline-block;color:#2563eb;text-decoration:none;font-size:13px;font-weight:700;margin-bottom:18px}}
+.panel {{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:19px;box-shadow:0 8px 24px rgba(15,23,42,.05);margin-bottom:14px}}
+.header {{display:flex;justify-content:space-between;gap:20px;align-items:start}} h1 {{margin:0;font-size:27px;letter-spacing:-.025em}} .region {{margin-top:5px;color:var(--muted);font-size:13px}}
+.badge {{padding:6px 10px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:11px;font-weight:700}} .badge.ok {{background:#dcfce7;color:#166534}} .badge.warn {{background:#fef3c7;color:#92400e}} .badge.bad {{background:#fee2e2;color:#991b1b}}
+.metrics {{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:18px}} .metric {{border-top:1px solid var(--line);padding-top:10px}} .metric span {{display:block;color:var(--muted);font-size:11px}} .metric strong {{display:block;margin-top:4px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+h2 {{margin:0 0 13px;font-size:18px}} .meta {{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}} .chip {{padding:6px 9px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:var(--muted)}}
+.table-wrap {{overflow-x:auto}} table {{width:100%;border-collapse:collapse;font-size:12px}} th {{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em;background:#f8fafc}} th,td {{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}} td.error {{max-width:320px;color:var(--muted);word-break:break-word}}
+.status {{display:inline-block;padding:4px 7px;border-radius:999px;background:#f1f5f9}} .status.success {{background:#dcfce7;color:#166534}} .status.empty {{background:#e0f2fe;color:#075985}} .status.stale,.status.degraded {{background:#fef3c7;color:#92400e}} .status.unavailable {{background:#fee2e2;color:#991b1b}}
+.empty-cell {{text-align:center;color:var(--muted);padding:30px}} .latest-error {{color:var(--muted);font-size:12px;word-break:break-word}}
+@media(max-width:750px) {{main{{padding:20px 14px}} .header{{flex-direction:column}} .metrics{{grid-template-columns:1fr 1fr}}}}
+</style></head><body><main>
+<a class="back" href="/ui/sources">← Все источники</a>
+<section class="panel">
+  <div class="header"><div><h1>{escape(source_id)}</h1><div class="region">{escape(region_name)} · регион {escape(region_code)}</div></div>
+  <span class="badge {'ok' if health_value == 'healthy' else 'warn' if health_value == 'degraded' else 'bad'}">{escape(health_labels.get(health_value, health_value))}</span></div>
+  <div class="meta"><span class="chip">Интервал: {spec.interval_seconds} с</span><span class="chip">Категории: {escape(categories)}</span></div>
+  <div class="metrics">
+    <div class="metric"><span>Последний статус</span><strong>{escape(latest_status)}</strong></div>
+    <div class="metric"><span>Событий</span><strong>{latest.event_count if latest else 0}</strong></div>
+    <div class="metric"><span>Последний опрос</span><strong>{escape(history[0].completed_at.astimezone().strftime("%d.%m.%Y %H:%M:%S") if history else "—")}</strong></div>
+    <div class="metric"><span>Длительность</span><strong>{escape(latest_duration)}</strong></div>
+    <div class="metric"><span>Ошибка</span><strong>{latest_error}</strong></div>
+  </div>
+</section>
+<section class="panel"><h2>История опросов</h2><div class="table-wrap"><table>
+<thead><tr><th>Время</th><th>Статус</th><th>Health</th><th>Событий</th><th>Время запроса</th><th>Ошибка / примечание</th></tr></thead>
+<tbody>{history_html}</tbody></table></div></section>
+</main></body></html>"""
+
+
 def render_sources_page(service: AlertService, scheduler) -> str:
     configured = scheduler.enabled_sources()
     results = scheduler.last_results()
@@ -236,7 +335,7 @@ def render_sources_page(service: AlertService, scheduler) -> str:
         source_spec = region_specs.get(spec.region_code, {}).get(spec.source_id)
         categories = ", ".join(sorted(source_spec.categories)) if source_spec else "—"
         rows.append(f"""
-        <article class="source-card {tone}">
+        <a class="source-link" href="/ui/sources/{escape(spec.region_code)}/{escape(spec.source_id)}"><article class="source-card {tone}">
           <div class="source-head">
             <div><div class="source-id">{escape(spec.source_id)}</div>
             <div class="source-region">{escape(REGION_NAMES.get(spec.region_code, f"Регион {spec.region_code}"))}</div></div>
@@ -249,7 +348,7 @@ def render_sources_page(service: AlertService, scheduler) -> str:
             <div><span>Категории</span><strong>{escape(categories)}</strong></div>
           </div>
           <div class="source-detail"><span>Последняя ошибка / примечание</span><p>{escape(detail)}</p></div>
-        </article>
+        </article></a>
         """)
 
     cards = "".join(rows) or '<div class="empty"><h2>Источники не настроены</h2><p>Для выбранных регионов нет зарегистрированных источников.</p></div>'
@@ -261,6 +360,7 @@ def render_sources_page(service: AlertService, scheduler) -> str:
 <style>
 :root {{--bg:#f5f7fa;--panel:#fff;--text:#111827;--muted:#64748b;--line:#e2e8f0;--ok:#15803d;--warn:#b45309;--bad:#dc2626;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}}
 * {{box-sizing:border-box}} body {{margin:0;background:var(--bg);color:var(--text)}} main {{max-width:1100px;margin:auto;padding:26px 18px 50px}}
+.source-link {{display:block;color:inherit;text-decoration:none}}
 .back {{display:inline-block;color:#2563eb;text-decoration:none;font-size:13px;font-weight:700;margin-bottom:18px}}
 .header {{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:22px}} h1 {{margin:0;font-size:30px;letter-spacing:-.03em}} .lead {{margin:6px 0 0;color:var(--muted);font-size:13px}}
 .summary {{display:flex;gap:10px;flex-wrap:wrap}} .summary span {{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:12px}}

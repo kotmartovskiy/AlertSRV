@@ -61,6 +61,52 @@ class RegionalSchedulerTests(unittest.TestCase):
         scheduler.stop()
         self.assertEqual(scheduler.enabled_sources(), ())
 
+    def test_history_records_latest_poll(self):
+        calls = []
+        scheduler = RegionalScheduler(
+            SourcePoller(AlertEngine()), (make_region("37", calls),), history_limit=2
+        )
+        scheduler.start()
+        scheduler.stop()
+        history = scheduler.history("37", "test-source")
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0].result.status.value, "empty")
+        self.assertEqual(history[0].result.event_count, 0)
+        self.assertGreaterEqual(history[0].duration_seconds, 0.0)
+        self.assertIsNotNone(history[0].completed_at.tzinfo)
+
+    def test_history_limit_and_unknown_source(self):
+        calls = []
+        scheduler = RegionalScheduler(
+            SourcePoller(AlertEngine()), (make_region("37", calls),), history_limit=1
+        )
+        scheduler.start()
+        scheduler.stop()
+        self.assertEqual(len(scheduler.history("37", "test-source", limit=1)), 1)
+        with self.assertRaises(KeyError):
+            scheduler.history("37", "missing")
+
+    def test_poll_failure_history_contains_error(self):
+        class Broken:
+            source_id = "broken"
+            def fetch(self):
+                raise TimeoutError("offline")
+
+        region = RegionModule(
+            region_code="37",
+            region_name="Ivanovo",
+            timezone="UTC",
+            sources=(RegionSourceSpec(
+                "broken", 60, frozenset({"test"}), lambda: Broken()
+            ),),
+        )
+        scheduler = RegionalScheduler(SourcePoller(AlertEngine()), (region,))
+        scheduler.start()
+        scheduler.stop()
+        history = scheduler.history("37", "broken")
+        self.assertEqual(history[0].result.status.value, "unavailable")
+        self.assertIn("offline", history[0].result.error)
+
     def test_poll_failure_does_not_stop_scheduler(self):
         class Broken:
             source_id = "broken"

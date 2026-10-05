@@ -1,12 +1,14 @@
 import threading
 import unittest
+from datetime import datetime, timezone
 from urllib.parse import quote
 from urllib.request import urlopen
 
 from alertsrv.api import create_server
 from alertsrv.engine import AlertEngine
 from alertsrv.service import AlertService
-from alertsrv.regions.scheduler import RegionalScheduler, ScheduledSource
+from alertsrv.regions.scheduler import PollHistoryEntry, RegionalScheduler, ScheduledSource
+from alertsrv.regions.base import RegionModule, RegionSourceSpec
 from alertsrv.poller import PollResult, PollStatus
 from alertsrv.models import SourceHealth
 from tests.test_engine import event
@@ -72,13 +74,60 @@ class UITests(unittest.TestCase):
                 return (ScheduledSource("37", "mchs-ivanovo", 300),)
             def last_results(self):
                 return {("37", "mchs-ivanovo"): PollResult("mchs-ivanovo", SourceHealth.HEALTHY, PollStatus.SUCCESS, ())}
-
+            def history(self, region_code, source_id, limit=None):
+                return (PollHistoryEntry(
+                    datetime.now(timezone.utc),
+                    PollResult(source_id, SourceHealth.HEALTHY, PollStatus.SUCCESS, ()),
+                    0.125,
+                ),)
         self.service.attach_scheduler(FakeScheduler())
         status, body = self.get("/ui/sources")
         self.assertEqual(status, 200)
         self.assertIn("mchs-ivanovo", body)
         self.assertIn("Успешно", body)
         self.assertIn("Ивановская область", body)
+        self.assertIn("/ui/sources/37/mchs-ivanovo", body)
+
+    def test_ui_source_detail_renders_history(self):
+        class FakeScheduler:
+            regions = ()
+            def enabled_sources(self):
+                return (ScheduledSource("37", "mchs-ivanovo", 300),)
+            def last_results(self):
+                return {("37", "mchs-ivanovo"): PollResult(
+                    "mchs-ivanovo", SourceHealth.HEALTHY, PollStatus.SUCCESS, ()
+                )}
+            def history(self, region_code, source_id, limit=None):
+                return (PollHistoryEntry(
+                    datetime(2026, 10, 6, 20, 30, 0, tzinfo=timezone.utc),
+                    PollResult(source_id, SourceHealth.HEALTHY, PollStatus.SUCCESS, ()),
+                    0.125,
+                ),)
+
+        self.service.attach_scheduler(FakeScheduler())
+        status, body = self.get("/ui/sources/37/mchs-ivanovo")
+        self.assertEqual(status, 200)
+        self.assertIn("История опросов", body)
+        self.assertIn("125 мс", body)
+        self.assertIn("Успешно", body)
+
+    def test_ui_source_detail_missing_returns_404(self):
+        class FakeScheduler:
+            regions = ()
+            def enabled_sources(self):
+                return ()
+            def last_results(self):
+                return {}
+            def history(self, region_code, source_id, limit=None):
+                return ()
+
+        self.service.attach_scheduler(FakeScheduler())
+        try:
+            self.get("/ui/sources/37/missing")
+        except Exception as exc:
+            self.assertEqual(getattr(exc, "code", None), 404)
+        else:
+            self.fail("expected HTTP 404")
 
     def test_ui_filters_region_and_municipality(self):
         first = event("ui-2", "mchs-37")

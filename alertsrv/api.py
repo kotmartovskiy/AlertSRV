@@ -4,12 +4,17 @@ import json
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .models import EventCategory, NormalizedEvent, ResolutionType, Severity
 from .serialization import alert_to_dict
 from .service import AlertService
-from .ui import render_alert_detail_page, render_alerts_page, render_sources_page
+from .ui import (
+    render_alert_detail_page,
+    render_alerts_page,
+    render_source_detail_page,
+    render_sources_page,
+)
 
 
 def _parse_event(data: dict) -> NormalizedEvent:
@@ -93,6 +98,30 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
                 body = render_alert_detail_page(self.service, alert_id).encode("utf-8")
             except KeyError:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path.startswith("/ui/sources/") and path != "/ui/sources":
+            scheduler = self.service.scheduler()
+            if scheduler is None:
+                self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "scheduler unavailable"})
+                return
+            parts = path.split("/")
+            if len(parts) != 5 or not parts[3] or not parts[4]:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "source not found"})
+                return
+            region_code = unquote(parts[3])
+            source_id = unquote(parts[4])
+            try:
+                body = render_source_detail_page(
+                    self.service, scheduler, region_code, source_id
+                ).encode("utf-8")
+            except KeyError:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "source not found"})
                 return
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
