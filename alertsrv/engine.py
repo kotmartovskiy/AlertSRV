@@ -323,9 +323,29 @@ class AlertEngine:
 
     @staticmethod
     def _transition(alert: Alert, new_state: AlertState, at: datetime, reason: str) -> None:
+        """Apply only legal alert lifecycle transitions."""
         old_state = alert.state
         if old_state == new_state:
             return
+
+        allowed = {
+            AlertState.NEW: {AlertState.ACTIVE},
+            AlertState.ACTIVE: {
+                AlertState.RESOLVED,
+                AlertState.EXPIRED,
+                AlertState.CANCELLED,
+                AlertState.SUPERSEDED,
+            },
+            AlertState.RESOLVED: set(),
+            AlertState.EXPIRED: set(),
+            AlertState.CANCELLED: set(),
+            AlertState.SUPERSEDED: set(),
+        }
+        if new_state not in allowed[old_state]:
+            raise ValueError(
+                f"illegal alert state transition: {old_state.value} -> {new_state.value}"
+            )
+
         alert.state = new_state
         alert.updated_at = max(alert.updated_at, at)
         alert.transition_history.append((old_state, new_state, at, reason))

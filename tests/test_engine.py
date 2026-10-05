@@ -129,6 +129,30 @@ class AlertEngineTests(unittest.TestCase):
         engine.ingest(cleared)
         self.assertEqual(alert.state, AlertState.ACTIVE)
 
+    def test_terminal_state_cannot_transition_again(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "weather-a"))
+        engine.resolve(alert.alert_id)
+        with self.assertRaises(ValueError):
+            engine._transition(alert, AlertState.ACTIVE, T0, "invalid reactivation")
+
+    def test_new_state_cannot_skip_active(self):
+        candidate = AlertEngine().ingest(event("transition-skip", "weather-a"))
+        candidate.state = AlertState.NEW
+        with self.assertRaises(ValueError):
+            AlertEngine._transition(candidate, AlertState.RESOLVED, T0, "invalid skip")
+
+    def test_active_state_all_terminal_transitions_are_allowed(self):
+        for terminal in (
+            AlertState.RESOLVED,
+            AlertState.EXPIRED,
+            AlertState.CANCELLED,
+            AlertState.SUPERSEDED,
+        ):
+            alert = AlertEngine().ingest(event(f"transition-{terminal.value}", "weather-a"))
+            AlertEngine._transition(alert, terminal, T0, "valid terminal transition")
+            self.assertEqual(alert.state, terminal)
+
     def test_older_event_cannot_move_updated_at_backwards(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a", received_offset=10))
         engine.ingest(event("2", "weather-b", received_offset=5))
