@@ -41,7 +41,7 @@ Completed:
 
 Current verified state:
 
-- 136 automated tests pass;
+- 161 automated tests pass;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
 - Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;
@@ -86,3 +86,16 @@ Unofficial reports may be useful as corroborating evidence in the future, but ca
 The national service must distinguish raw observations from logical threats: one event can have multiple independent pieces of evidence, and one source can report many observations about the same underlying threat.
 
 Source lifecycle is separate from alert lifecycle. A source being unavailable, degraded, or recovered is operational evidence about the source, not evidence that an underlying threat ended.
+
+### Lifecycle authority policy
+
+Resolution authority is category-specific rather than inferred from parser confidence:
+
+- `air_threat`: the regional operational headquarters is lifecycle-authoritative; MChS and civil-defense feeds are corroborating evidence unless a future source-specific policy explicitly promotes them.
+- `weather`: official MChS/Rosgidromet sources may resolve according to their source policy.
+- `emergency_mode` and `quarantine`: resolution must come from a source explicitly authorized for that category.
+- unofficial/corroborating sources may strengthen or contradict an alert, but cannot independently clear a safety-critical alert.
+- when several lifecycle-authoritative sources exist for the same logical alert, all current authoritative source states must clear before automatic resolution.
+- stale, missing, unavailable, or recovered sources do not count as a clear.
+
+The implementation represents this through source-authority policy plus category-scoped resolution permissions; the policy is deliberately testable and can later be expanded to subtype/geography-specific rules.
