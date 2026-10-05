@@ -25,6 +25,8 @@ class AlertStore(Protocol):
 class SQLiteAlertStore:
     """Small durable SQLite store for alerts and aggregation indexes."""
 
+    SCHEMA_VERSION = 2
+
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
         self._lock = RLock()
@@ -48,12 +50,39 @@ class SQLiteAlertStore:
                 source_id TEXT PRIMARY KEY,
                 health TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS schema_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
-        columns = {row[1] for row in self._db.execute("PRAGMA table_info(event_index)")}
-        if "received_at" not in columns:
-            self._db.execute("ALTER TABLE event_index ADD COLUMN received_at TEXT")
+        self._migrate_schema()
+
+    def _migrate_schema(self) -> None:
+        row = self._db.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+        ).fetchone()
+        version = int(row[0]) if row else 1
+        if version < 2:
+            columns = {row[1] for row in self._db.execute("PRAGMA table_info(event_index)")}
+            if "received_at" not in columns:
+                self._db.execute("ALTER TABLE event_index ADD COLUMN received_at TEXT")
+            self._db.execute(
+                "INSERT INTO schema_meta(key, value) VALUES('schema_version', '2') "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+            )
+            version = 2
+        if version != self.SCHEMA_VERSION:
+            raise RuntimeError(f"unsupported database schema version: {version}")
         self._db.commit()
+
+    @property
+    def schema_version(self) -> int:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).fetchone()
+            return int(row[0]) if row else 1
 
     def load_alerts(self) -> list[Alert]:
         with self._lock:

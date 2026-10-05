@@ -143,7 +143,16 @@ A dedicated API contract document will be added when the endpoint set and semant
 
 ## Persistence
 
-SQLite persistence is deliberately simple at this stage.
+SQLite persistence is deliberately simple at this stage. The database has an explicit schema version (currently 2); startup applies only known forward migrations and rejects unknown schema versions instead of guessing.
+
+Operational maintenance helpers provide:
+
+- consistent SQLite online backups;
+- `PRAGMA integrity_check` verification;
+- atomic restoration from a verified backup;
+- timestamped backup naming for scheduled retention jobs.
+
+Backups should be taken before deployments and schema changes. A failed integrity check must not be treated as an alert-state change or silently repaired in place.
 
 The store currently persists:
 

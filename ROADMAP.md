@@ -71,7 +71,7 @@ The semantic taxonomy is documented in docs/PUBLIC_SAFETY_TAXONOMY.md.
 
 ## Next work
 
-1. Add operational retention, backup/repair and schema migration procedures.
+1. Add operational retention policy automation and scheduled backup rotation; backup/repair helpers and schema migration versioning are implemented.
 2. Add broader national source coverage only after each source family has deterministic tests.
 3. Add source-specific freshness/degradation metadata where an adapter can distinguish:
    successful empty result, stale upstream data, parser degradation, and transport failure.
