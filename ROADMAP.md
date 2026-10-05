@@ -61,7 +61,7 @@ The semantic taxonomy is documented in docs/PUBLIC_SAFETY_TAXONOMY.md.
 
 ## Next work
 
-1. Separate extraction confidence from source authority/reliability without breaking existing adapters or persisted alerts.
+1. Extend source-authority mapping to additional source families as they are added.
 2. Extend geographic representation from region_code to a structured affected_area hierarchy:
    federal -> region -> municipality -> settlement -> local_area.
 3. Add contradiction and cancellation semantics for safety-critical warnings.
