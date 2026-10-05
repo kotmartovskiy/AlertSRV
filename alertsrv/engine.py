@@ -7,6 +7,7 @@ from uuid import uuid4
 from .freshness import Freshness, FreshnessPolicy
 from .hazards import classify_hazard
 from .keys import dedup_key
+from .source_authority import source_authority
 from .models import Alert, AlertState, Evidence, NormalizedEvent, SourceHealth
 from .storage import AlertStore
 
@@ -51,6 +52,7 @@ class AlertEngine:
             return self._alerts[existing_id]
 
         freshness = self._freshness.classify(event, now=self._clock())
+        authority = source_authority(event.payload.get("source_kind"))
         if freshness == Freshness.FUTURE:
             raise ValueError("event received_at is too far in the future")
         if freshness == Freshness.STALE:
@@ -66,6 +68,8 @@ class AlertEngine:
             received_at=event.received_at,
             title=event.title,
             payload=dict(event.payload),
+            source_authority=authority.authority.value,
+            source_authority_score=authority.score,
         )
 
         if alert is None:
@@ -79,6 +83,8 @@ class AlertEngine:
                 started_at=event.occurred_at,
                 updated_at=event.received_at,
                 expires_at=event.expires_at,
+                source_authority=authority.authority.value,
+                source_authority_score=authority.score,
             )
             self._alerts[alert.alert_id] = alert
             self._transition(alert, AlertState.ACTIVE, event.received_at, "first observation")
@@ -95,6 +101,9 @@ class AlertEngine:
                 alert.severity = event.severity
             if event.confidence > alert.confidence:
                 alert.confidence = event.confidence
+            if authority.score > alert.source_authority_score:
+                alert.source_authority = authority.authority.value
+                alert.source_authority_score = authority.score
             if event.expires_at is not None:
                 if alert.expires_at is None or event.expires_at > alert.expires_at:
                     alert.expires_at = event.expires_at

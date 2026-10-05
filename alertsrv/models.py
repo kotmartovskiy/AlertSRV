@@ -40,11 +40,15 @@ class NormalizedEvent:
     payload: dict[str, Any] = field(default_factory=dict)
     expires_at: datetime | None = None
     resolved: bool = False
+    source_authority: str = "unknown"
+    source_authority_score: float = 0.0
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("confidence must be between 0.0 and 1.0")
         if not self.event_id or not self.source_id or not self.correlation_key:
             raise ValueError("event_id, source_id and correlation_key are required")
+        if not 0.0 <= self.source_authority_score <= 1.0:
+            raise ValueError("source_authority_score must be between 0.0 and 1.0")
         if self.expires_at is not None and self.expires_at < self.occurred_at:
             raise ValueError("expires_at cannot precede occurred_at")
 
@@ -58,6 +62,8 @@ class Evidence:
     received_at: datetime
     title: str
     payload: dict[str, Any] = field(default_factory=dict)
+    source_authority: str = "unknown"
+    source_authority_score: float = 0.0
 
 @dataclass(slots=True)
 class Alert:
@@ -70,5 +76,7 @@ class Alert:
     started_at: datetime
     updated_at: datetime
     expires_at: datetime | None = None
+    source_authority: str = "unknown"
+    source_authority_score: float = 0.0
     evidence: list[Evidence] = field(default_factory=list)
     transition_history: list[tuple[AlertState, AlertState, datetime, str]] = field(default_factory=list)

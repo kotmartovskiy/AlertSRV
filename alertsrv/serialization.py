@@ -26,6 +26,8 @@ def alert_to_dict(alert: Alert) -> dict[str, Any]:
         "started_at": datetime_to_json(alert.started_at),
         "updated_at": datetime_to_json(alert.updated_at),
         "expires_at": datetime_to_json(alert.expires_at) if alert.expires_at else None,
+        "source_authority": alert.source_authority,
+        "source_authority_score": alert.source_authority_score,
         "evidence": [
             {
                 "event_id": item.event_id,
@@ -36,6 +38,8 @@ def alert_to_dict(alert: Alert) -> dict[str, Any]:
                 "received_at": datetime_to_json(item.received_at),
                 "title": item.title,
                 "payload": item.payload,
+                "source_authority": item.source_authority,
+                "source_authority_score": item.source_authority_score,
             }
             for item in alert.evidence
         ],
@@ -62,6 +66,8 @@ def alert_from_dict(data: dict[str, Any]) -> Alert:
             received_at=datetime_from_json(item["received_at"]),
             title=item["title"],
             payload=dict(item.get("payload", {})),
+            source_authority=item.get("source_authority", "unknown"),
+            source_authority_score=float(item.get("source_authority_score", 0.0)),
         )
         for item in data.get("evidence", [])
     ]
@@ -84,6 +90,8 @@ def alert_from_dict(data: dict[str, Any]) -> Alert:
         started_at=datetime_from_json(data["started_at"]),
         updated_at=datetime_from_json(data["updated_at"]),
         expires_at=(datetime_from_json(data["expires_at"]) if data.get("expires_at") else None),
+        source_authority=data.get("source_authority", "unknown"),
+        source_authority_score=float(data.get("source_authority_score", 0.0)),
         evidence=evidence,
         transition_history=transitions,
     )
