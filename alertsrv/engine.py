@@ -128,11 +128,24 @@ class AlertEngine:
                     alert.expires_at = event.expires_at
 
         alert.evidence.append(evidence)
-        resolution_state = self._resolution_state(event, authority.authority.value)
+        resolution_state = self._resolution_state(event, authority)
         if (
             resolution_state is not None
             and alert.state == AlertState.ACTIVE
-            and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
+            and (
+                (
+                    authority.can_resolve(event.category.value if event.category else event.payload.get("category"))
+                    and self._all_resolving_sources_resolved(
+                        alert,
+                        category=event.category.value if event.category else event.payload.get("category"),
+                        resolved_event_id=event.event_id,
+                    )
+                )
+                or (
+                    not authority.can_resolve(event.category.value if event.category else event.payload.get("category"))
+                    and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
+                )
+            )
         ):
             resolution_type = event.resolution_type.value if event.resolution_type else event.payload.get("resolution_type", "resolved")
             replacement_alert_id = self._explicit_replacement_alert_id(event)
@@ -280,7 +293,7 @@ class AlertEngine:
         return replacement_alert_id
 
     @staticmethod
-    def _resolution_state(event: NormalizedEvent, authority: str) -> AlertState | None:
+    def _resolution_state(event: NormalizedEvent, authority) -> AlertState | None:
         """Map an explicit clearance semantic to its terminal alert state."""
         if not event.resolved:
             return None
@@ -288,7 +301,7 @@ class AlertEngine:
         resolution_type = event.resolution_type.value if event.resolution_type else event.payload.get("resolution_type")
         category = event.category.value if event.category else event.payload.get("category")
         if category in {"air_threat", "emergency_mode", "quarantine", "public_safety"}:
-            if authority != "official_primary":
+            if not authority.can_resolve(category):
                 return None
             if resolution_type not in {item.value for item in ResolutionType}:
                 return None
@@ -304,6 +317,31 @@ class AlertEngine:
         if resolution_type is None:
             return AlertState.RESOLVED
         return None
+
+    @staticmethod
+    def _all_resolving_sources_resolved(
+        alert: Alert, *, category: str | None, resolved_event_id: str
+    ) -> bool:
+        """Require all lifecycle-authoritative sources to clear.
+
+        Corroborating sources are deliberately excluded: their stale or missing
+        clear must never make an otherwise authoritative alert immortal.
+        Multiple authoritative sources still require agreement.
+        """
+        latest_by_source: dict[str, Evidence] = {}
+        for evidence in alert.evidence:
+            previous = latest_by_source.get(evidence.source_id)
+            if previous is None or evidence.received_at >= previous.received_at:
+                latest_by_source[evidence.source_id] = evidence
+        resolving = [
+            evidence
+            for evidence in latest_by_source.values()
+            if source_authority(evidence.payload.get("source_kind")).can_resolve(category)
+        ]
+        return bool(resolving) and all(
+            evidence.event_id == resolved_event_id or evidence.payload.get("resolved") is True
+            for evidence in resolving
+        )
 
     @staticmethod
     def _all_sources_resolved(alert: Alert, *, resolved_event_id: str) -> bool:

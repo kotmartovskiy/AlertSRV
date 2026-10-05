@@ -15,10 +15,18 @@ class SourceAuthority(str, Enum):
 class SourceAuthorityPolicy:
     authority: SourceAuthority
     score: float
+    resolution_categories: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.score <= 1.0:
             raise ValueError("authority score must be between 0.0 and 1.0")
+
+    def can_resolve(self, category: str | None) -> bool:
+        if self.authority != SourceAuthority.OFFICIAL_PRIMARY:
+            return False
+        if self.resolution_categories is None:
+            return True
+        return category in self.resolution_categories
 
 
 _POLICIES = {
@@ -39,6 +47,15 @@ _SOURCE_KIND_POLICIES = {
 }
 
 
+_SOURCE_KIND_RESOLUTION_CATEGORIES = {
+    "official_mchs": frozenset({"weather", "emergency_mode", "quarantine", "public_safety"}),
+}
+
 def source_authority(source_kind: str | None) -> SourceAuthorityPolicy:
-    authority = _SOURCE_KIND_POLICIES.get(source_kind or "", SourceAuthority.UNKNOWN)
-    return _POLICIES[authority]
+    source_kind = source_kind or ""
+    authority = _SOURCE_KIND_POLICIES.get(source_kind, SourceAuthority.UNKNOWN)
+    policy = _POLICIES[authority]
+    categories = _SOURCE_KIND_RESOLUTION_CATEGORIES.get(source_kind)
+    if categories is None:
+        return policy
+    return SourceAuthorityPolicy(policy.authority, policy.score, categories)

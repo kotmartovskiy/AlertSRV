@@ -312,7 +312,7 @@ class AlertEngineTests(unittest.TestCase):
         clear = event("clear", "official-b", resolved=True, received_offset=5)
         clear.payload.update({
             "category": "public_safety",
-            "source_kind": "official_mchs",
+            "source_kind": "official_civil_defense",
             "resolution_type": "all_clear",
         })
         engine.ingest(clear)

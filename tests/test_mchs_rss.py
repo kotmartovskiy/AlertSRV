@@ -80,7 +80,7 @@ def test_mchs_rss_air_threat_clear_is_typed():
     assert event.resolution_type.value == "all_clear"
 
 
-def test_mchs_and_regional_telegram_are_correlated_and_require_both_clear():
+def test_mchs_and_regional_telegram_are_correlated_but_regional_hq_owns_air_threat_clear():
     from datetime import datetime, timezone, timedelta
     from alertsrv.adapters.ivanovo_operational_telegram import parse_telegram_preview
     from alertsrv.engine import AlertEngine
@@ -109,7 +109,7 @@ def test_mchs_and_regional_telegram_are_correlated_and_require_both_clear():
     engine.ingest(telegram_events[0])
     assert len(alert.evidence) == 2
     assert alert.state.value == "active"
-    engine.ingest(telegram_events[1])
-    assert alert.state.value == "active"
     engine.ingest(mchs_events[1])
+    assert alert.state.value == "active"
+    engine.ingest(telegram_events[1])
     assert alert.state.value == "resolved"
