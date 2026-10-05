@@ -73,3 +73,57 @@ def test_hydrology_ignores_old_bulletin():
         html, url="https://example.test/old", received_at=datetime(2026, 10, 5, tzinfo=timezone.utc)
     )
     assert events == []
+
+
+
+def test_hydrology_discovery_selects_latest_matching_bulletin():
+    html = """
+    <div>2 октября 2026</div>
+    <a href="/press/polovod2026/45214/">Опасные и неблагоприятные явления на реках, озерах и водохранилищах Российской Федерации по состоянию на 2 октября 2026 г.</a>
+    <a href="/press/polovod2026/45199/">Гидрологическая обстановка на реках Томской области по спутниковым данным за 28 сентября-1 октября 2026 г.</a>
+    <a href="/press/polovod2026/45150/">Опасные и неблагоприятные явления на реках, озерах и водохранилищах Российской Федерации по состоянию на 30 сентября 2026 г.</a>
+    """
+    bulletin = RosgidrometHydrologyAdapter.discover_latest(
+        html, now=datetime(2026, 10, 5, tzinfo=timezone.utc)
+    )
+    assert bulletin is not None
+    assert bulletin.url.endswith("/45214/")
+    assert bulletin.published_at == datetime(2026, 10, 2, tzinfo=timezone(timedelta(hours=3)))
+
+
+def test_hydrology_discovery_rejects_future_bulletin():
+    html = """
+    <a href="/press/polovod2026/45299/">Опасные и неблагоприятные явления на реках, озерах и водохранилищах Российской Федерации по состоянию на 6 октября 2026 г.</a>
+    """
+    bulletin = RosgidrometHydrologyAdapter.discover_latest(
+        html, now=datetime(2026, 10, 5, 12, tzinfo=timezone.utc)
+    )
+    assert bulletin is None
+
+
+def test_hydrology_expiration_uses_explicit_forecast_end():
+    html = """
+    <div>2 октября 2026 г</div>
+    <table><tr><td>Ивановская область</td><td>Уводь</td><td>Иваново</td>
+    <td>уровень воды ниже отметки поймы</td><td>выход воды на пойму 2-5 октября</td></tr></table>
+    """
+    events = RosgidrometHydrologyAdapter(max_bulletin_age=timedelta(days=100)).parse(
+        html, url="https://example.test/h", received_at=datetime(2026, 10, 2, tzinfo=timezone.utc)
+    )
+    assert len(events) == 1
+    assert events[0].expires_at == datetime(
+        2026, 10, 5, 23, 59, 59, tzinfo=timezone(timedelta(hours=3))
+    )
+
+
+def test_hydrology_keeps_open_ended_forecast_without_invented_expiry():
+    html = """
+    <div>2 октября 2026 г</div>
+    <table><tr><td>Ивановская область</td><td>Уводь</td><td>Иваново</td>
+    <td>превышена отметка ОЯ</td><td>превышение отметки ОЯ сохранится</td></tr></table>
+    """
+    events = RosgidrometHydrologyAdapter(max_bulletin_age=timedelta(days=100)).parse(
+        html, url="https://example.test/h", received_at=datetime(2026, 10, 2, tzinfo=timezone.utc)
+    )
+    assert len(events) == 1
+    assert events[0].expires_at is None

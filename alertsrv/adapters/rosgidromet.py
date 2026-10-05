@@ -1,28 +1,34 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 import hashlib
 import re
+from urllib.parse import urljoin
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 from ..classification import classify_event
 from ..hazards import classify_hazard
 from ..models import NormalizedEvent, Severity
 
 DEFAULT_EMERGENCY_URL = "https://www.meteorf.gov.ru/product/emergency/"
+DEFAULT_HYDROLOGY_INDEX_URL = "https://www.meteorf.gov.ru/press/polovod2026/"
+HYDROLOGY_TITLE_PREFIX = "Опасные и неблагоприятные явления на реках, озерах и водохранилищах Российской Федерации"
+_MOSCOW = ZoneInfo("Europe/Moscow")
 
 _MONTHS = dict(zip(
-    "\u044f\u043d\u0432\u0430\u0440\u044f,\u0444\u0435\u0432\u0440\u0430\u043b\u044f,\u043c\u0430\u0440\u0442\u0430,\u0430\u043f\u0440\u0435\u043b\u044f,\u043c\u0430\u044f,\u0438\u044e\u043d\u044f,\u0438\u044e\u043b\u044f,\u0430\u0432\u0433\u0443\u0441\u0442\u0430,\u0441\u0435\u043d\u0442\u044f\u0431\u0440\u044f,\u043e\u043a\u0442\u044f\u0431\u0440\u044f,\u043d\u043e\u044f\u0431\u0440\u044f,\u0434\u0435\u043a\u0430\u0431\u0440\u044f".split(","), range(1, 13)
+    "января,февраля,марта,апреля,мая,июня,июля,августа,сентября,октября,ноября,декабря".split(","),
+    range(1, 13)
 ))
+
 
 class _EmergencyParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.items: list[tuple[str, str]] = []
-        self._item_depth = 0
-        self._date_depth = 0
-        self._text_depth = 0
+        self._item_depth = self._date_depth = self._text_depth = 0
         self._date: list[str] = []
         self._text: list[str] = []
 
@@ -55,6 +61,7 @@ class _EmergencyParser(HTMLParser):
         elif self._text_depth:
             self._text.append(data.strip())
 
+
 class RosgidrometEmergencyAdapter:
     def __init__(self, url: str = DEFAULT_EMERGENCY_URL, timeout: float = 15.0, source_id: str = "rosgidromet-emergency") -> None:
         self.url, self.timeout, self.source_id = url, timeout, source_id
@@ -71,6 +78,7 @@ class RosgidrometEmergencyAdapter:
                 continue
             stable = f"{occurred_at.isoformat()}:{body}"
             digest = hashlib.sha256(stable.encode("utf-8")).hexdigest()[:24]
+            category, subtype = classify_event(body, event_type="weather.emergency_national")
             events.append(NormalizedEvent(
                 event_id=f"{self.source_id}:{digest}",
                 source_id=self.source_id,
@@ -81,7 +89,9 @@ class RosgidrometEmergencyAdapter:
                 occurred_at=occurred_at,
                 received_at=datetime.now(timezone.utc),
                 correlation_key=f"{self.source_id}:{stable}",
-                payload={"url": self.url, "text": body, "scope": "russia", "hazard_class": classify_hazard(body, event_type="weather.emergency_national"), "category": classify_event(body, event_type="weather.emergency_national")[0], "subtype": classify_event(body, event_type="weather.emergency_national")[1]},
+                payload={"url": self.url, "text": body, "scope": "russia",
+                         "hazard_class": classify_hazard(body, event_type="weather.emergency_national"),
+                         "category": category, "subtype": subtype},
             ))
         return events
 
@@ -98,14 +108,56 @@ class RosgidrometEmergencyAdapter:
         return datetime(int(year), month, int(day), int(hour or 0), int(minute or 0), tzinfo=timezone.utc)
 
 
-DEFAULT_HYDROLOGY_URL = "https://www.meteorf.gov.ru/press/polovod2026/44449/"
+@dataclass(frozen=True, slots=True)
+class HydrologyBulletin:
+    url: str
+    published_at: datetime
+
+
+class _HydrologyIndexParser(HTMLParser):
+    """Find official hydrology bulletin links and publication dates on the index."""
+    def __init__(self) -> None:
+        super().__init__()
+        self.items: list[HydrologyBulletin] = []
+        self._href: str | None = None
+        self._text: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        attrs_map = dict(attrs)
+        href = attrs_map.get("href")
+        if href:
+            self._href = href
+            self._text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or self._href is None:
+            return
+        title = " ".join(" ".join(self._text).split())
+        match = re.match(
+            re.escape(HYDROLOGY_TITLE_PREFIX) +
+            r"\s+по состоянию на\s+(\d{1,2})\s+([^\s]+)\s+(\d{4})\s*г?\.?",
+            title,
+            re.I,
+        )
+        if match:
+            day, month_name, year = match.groups()
+            month = _MONTHS.get(month_name.lower())
+            if month:
+                self.items.append(HydrologyBulletin(
+                    url=urljoin(DEFAULT_HYDROLOGY_INDEX_URL, self._href),
+                    published_at=datetime(int(year), month, int(day), tzinfo=_MOSCOW),
+                ))
+        self._href = None
+        self._text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._href is not None:
+            self._text.append(data)
+
 
 class _HydrologyTableParser(HTMLParser):
-    """Extract table rows from Rosgidromet hydrology bulletins.
-
-    The parser deliberately captures table structure rather than trying to
-    infer geography from prose. Source wording is retained verbatim.
-    """
     def __init__(self) -> None:
         super().__init__()
         self.rows: list[list[str]] = []
@@ -120,8 +172,7 @@ class _HydrologyTableParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if tag in ("td", "th") and self._row is not None and self._cell is not None:
-            value = " ".join(" ".join(self._cell).split())
-            self._row.append(value)
+            self._row.append(" ".join(" ".join(self._cell).split()))
             self._cell = None
         elif tag == "tr" and self._row is not None:
             if self._row:
@@ -148,12 +199,31 @@ def _hydrology_classification(text: str) -> tuple[str, Severity]:
     return "hydrology", Severity.WARNING
 
 
+def _forecast_expiration(forecast: str, published_at: datetime) -> datetime | None:
+    """Extract an explicit forecast end date; otherwise leave expiry unset."""
+    match = re.search(
+        r"(\d{1,2})(?:\s*[-–]\s*(\d{1,2}))?\s+"
+        r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)",
+        forecast,
+        re.I,
+    )
+    if not match:
+        return None
+    start, end, month_name = match.groups()
+    month = _MONTHS[month_name.lower()]
+    day = int(end or start)
+    year = published_at.year
+    if month < published_at.month and published_at.month - month > 6:
+        year += 1
+    return datetime(year, month, day, 23, 59, 59, tzinfo=_MOSCOW)
+
+
 class RosgidrometHydrologyAdapter:
-    """Parse official Rosgidromet hydrology bulletins into structured events."""
+    """Discover and parse current official Rosgidromet hydrology bulletins."""
 
     def __init__(
         self,
-        url: str = DEFAULT_HYDROLOGY_URL,
+        url: str = DEFAULT_HYDROLOGY_INDEX_URL,
         *,
         timeout: float = 15.0,
         source_id: str = "rosgidromet-hydrology",
@@ -169,13 +239,29 @@ class RosgidrometHydrologyAdapter:
         with urlopen(request, timeout=self.timeout) as response:
             return response.read()
 
+    @staticmethod
+    def discover_latest(html: str, *, now: datetime, base_url: str = DEFAULT_HYDROLOGY_INDEX_URL) -> HydrologyBulletin | None:
+        parser = _HydrologyIndexParser()
+        parser.feed(html)
+        if base_url != DEFAULT_HYDROLOGY_INDEX_URL:
+            parser.items = [HydrologyBulletin(url=urljoin(base_url, item.url), published_at=item.published_at) for item in parser.items]
+        candidates = [item for item in parser.items if item.published_at <= now.astimezone(_MOSCOW)]
+        return max(candidates, key=lambda item: item.published_at, default=None)
+
     def fetch(self) -> list[NormalizedEvent]:
-        html = self._fetch(self.url).decode("utf-8", "replace")
-        return self.parse(html, url=self.url, received_at=datetime.now(timezone.utc))
+        received_at = datetime.now(timezone.utc)
+        index_html = self._fetch(self.url).decode("utf-8", "replace")
+        bulletin = self.discover_latest(index_html, now=received_at, base_url=self.url)
+        if bulletin is None:
+            return []
+        if bulletin.published_at < received_at.astimezone(_MOSCOW) - self.max_bulletin_age:
+            return []
+        html = self._fetch(bulletin.url).decode("utf-8", "replace")
+        return self.parse(html, url=bulletin.url, received_at=received_at)
 
     def parse(self, html: str, *, url: str, received_at: datetime) -> list[NormalizedEvent]:
         published = self._parse_published_at(html)
-        if published < received_at - self.max_bulletin_age:
+        if published < received_at.astimezone(_MOSCOW) - self.max_bulletin_age:
             return []
         parser = _HydrologyTableParser()
         parser.feed(html)
@@ -189,6 +275,7 @@ class RosgidrometHydrologyAdapter:
             if not re.search(r"(опасн|неблагоприятн|\bОЯ\b|\bНЯ\b|пойм|уровень воды ниже)", combined, re.I):
                 continue
             subtype, severity = _hydrology_classification(combined)
+            expires_at = _forecast_expiration(forecast, published)
             stable = "|".join((region, water_body, point, fact, forecast, published.isoformat()))
             digest = hashlib.sha256(stable.encode("utf-8")).hexdigest()[:24]
             events.append(NormalizedEvent(
@@ -201,6 +288,7 @@ class RosgidrometHydrologyAdapter:
                 occurred_at=published,
                 received_at=received_at,
                 correlation_key=f"hydrology:{region}:{water_body}:{point}:{subtype}",
+                expires_at=expires_at,
                 payload={
                     "url": url,
                     "region_name": region,
@@ -213,6 +301,7 @@ class RosgidrometHydrologyAdapter:
                     "subtype": subtype,
                     "hazard_class": "hydrology",
                     "source_kind": "official_rosgidromet_hydrology",
+                    "bulletin_published_at": published.isoformat(),
                 },
             ))
         return events
@@ -230,4 +319,4 @@ class RosgidrometHydrologyAdapter:
             return datetime.now(timezone.utc)
         day, month_name, year = match.groups()
         month = _MONTHS[month_name.lower()]
-        return datetime(int(year), month, int(day), tzinfo=timezone.utc)
+        return datetime(int(year), month, int(day), tzinfo=_MOSCOW)
