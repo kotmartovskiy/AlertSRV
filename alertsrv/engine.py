@@ -237,11 +237,53 @@ class AlertEngine:
                     continue
                 if hazard != event_hazard:
                     continue
+                if not self._affected_areas_compatible(event.payload, payload):
+                    continue
                 delta = abs((evidence.occurred_at - event.occurred_at).total_seconds())
                 if delta <= 6 * 3600:
                     matches.append(alert)
                     break
         return max(matches, key=lambda a: a.updated_at) if matches else None
+
+    @staticmethod
+    def _affected_areas_compatible(event_payload: dict, evidence_payload: dict) -> bool:
+        """Require explicit spatial compatibility before cross-source merging.
+
+        Region-wide observations correlate only with other region-wide observations.
+        More specific areas correlate only when their normalized identities overlap.
+        Missing geography is never treated as compatible with specific geography.
+        """
+        event_areas = event_payload.get("affected_areas") or []
+        evidence_areas = evidence_payload.get("affected_areas") or []
+        event_precision = event_payload.get("geography_precision")
+        evidence_precision = evidence_payload.get("geography_precision")
+
+        event_is_region = not event_areas and event_precision in (None, "region")
+        evidence_is_region = not evidence_areas and evidence_precision in (None, "region")
+        if event_is_region or evidence_is_region:
+            return event_is_region and evidence_is_region
+        if not event_areas or not evidence_areas:
+            return False
+
+        def norm(value: object) -> str:
+            return str(value).strip().casefold() if value is not None else ""
+
+        def overlaps(a: dict, b: dict) -> bool:
+            la, lb = a.get("level"), b.get("level")
+            if la == "farm" and lb == "farm":
+                ca, cb = norm(a.get("cadastral_number")), norm(b.get("cadastral_number"))
+                return bool(ca and cb and ca == cb)
+            if la == "municipality" and lb == "municipality":
+                return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("name")))
+            if la == "settlement" and lb == "settlement":
+                return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("name")))
+            if la == "municipality" and lb == "settlement":
+                return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("municipality")))
+            if la == "settlement" and lb == "municipality":
+                return bool(norm(b.get("name")) and norm(b.get("name")) == norm(a.get("municipality")))
+            return False
+
+        return any(overlaps(a, b) for a in event_areas for b in evidence_areas)
 
     @staticmethod
     def _transition(alert: Alert, new_state: AlertState, at: datetime, reason: str) -> None:
