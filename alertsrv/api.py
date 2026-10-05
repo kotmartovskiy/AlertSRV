@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 from .models import EventCategory, NormalizedEvent, ResolutionType, Severity
 from .serialization import alert_to_dict
 from .service import AlertService
-from .ui import render_alert_detail_page, render_alerts_page
+from .ui import render_alert_detail_page, render_alerts_page, render_sources_page
 
 
 def _parse_event(data: dict) -> NormalizedEvent:
@@ -94,6 +94,18 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
             except KeyError:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
                 return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/ui/sources":
+            scheduler = self.service.scheduler()
+            if scheduler is None:
+                self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "scheduler unavailable"})
+                return
+            body = render_sources_page(self.service, scheduler).encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

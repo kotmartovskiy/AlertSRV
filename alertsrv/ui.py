@@ -202,6 +202,83 @@ ul {{margin:0;padding-left:20px;color:var(--muted);font-size:13px}} .timeline-it
 <section class="panel"><h2>Хронология</h2>{timeline_html}</section>
 </main></body></html>"""
 
+
+def render_sources_page(service: AlertService, scheduler) -> str:
+    configured = scheduler.enabled_sources()
+    results = scheduler.last_results()
+    health = service.sources()
+    rows: list[str] = []
+
+    region_specs = {
+        region.region_code: {spec.source_id: spec for spec in region.sources}
+        for region in scheduler.regions
+    }
+
+    for spec in sorted(configured, key=lambda item: (item.region_code, item.source_id)):
+        result = results.get((spec.region_code, spec.source_id))
+        source_health = health.get(spec.source_id)
+        health_value = getattr(source_health, "value", str(source_health or "unknown"))
+        status_value = result.status.value if result else "not_polled"
+        status_labels = {
+            "success": "Успешно", "empty": "Пусто", "stale": "Устарело",
+            "degraded": "Деградация", "unavailable": "Недоступен",
+            "not_polled": "Ещё не опрашивался",
+        }
+        health_labels = {
+            "healthy": "Здоров", "degraded": "Деградация",
+            "unavailable": "Недоступен", "unknown": "Нет данных",
+        }
+        tone = "ok" if health_value == "healthy" and status_value in {"success", "empty"} else (
+            "warn" if health_value == "degraded" or status_value in {"stale", "not_polled"} else "bad"
+        )
+        detail = result.error if result and result.error else "—"
+        event_count = result.event_count if result else 0
+        source_spec = region_specs.get(spec.region_code, {}).get(spec.source_id)
+        categories = ", ".join(sorted(source_spec.categories)) if source_spec else "—"
+        rows.append(f"""
+        <article class="source-card {tone}">
+          <div class="source-head">
+            <div><div class="source-id">{escape(spec.source_id)}</div>
+            <div class="source-region">{escape(REGION_NAMES.get(spec.region_code, f"Регион {spec.region_code}"))}</div></div>
+            <span class="badge {tone}">{escape(health_labels.get(health_value, health_value))}</span>
+          </div>
+          <div class="source-grid">
+            <div><span>Последний результат</span><strong>{escape(status_labels.get(status_value, status_value))}</strong></div>
+            <div><span>Событий</span><strong>{event_count}</strong></div>
+            <div><span>Интервал</span><strong>{spec.interval_seconds} с</strong></div>
+            <div><span>Категории</span><strong>{escape(categories)}</strong></div>
+          </div>
+          <div class="source-detail"><span>Последняя ошибка / примечание</span><p>{escape(detail)}</p></div>
+        </article>
+        """)
+
+    cards = "".join(rows) or '<div class="empty"><h2>Источники не настроены</h2><p>Для выбранных регионов нет зарегистрированных источников.</p></div>'
+    healthy = sum(1 for spec in configured if getattr(health.get(spec.source_id), "value", "") == "healthy")
+    problems = len(configured) - healthy
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AlertSRV — источники</title>
+<style>
+:root {{--bg:#f5f7fa;--panel:#fff;--text:#111827;--muted:#64748b;--line:#e2e8f0;--ok:#15803d;--warn:#b45309;--bad:#dc2626;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}}
+* {{box-sizing:border-box}} body {{margin:0;background:var(--bg);color:var(--text)}} main {{max-width:1100px;margin:auto;padding:26px 18px 50px}}
+.back {{display:inline-block;color:#2563eb;text-decoration:none;font-size:13px;font-weight:700;margin-bottom:18px}}
+.header {{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:22px}} h1 {{margin:0;font-size:30px;letter-spacing:-.03em}} .lead {{margin:6px 0 0;color:var(--muted);font-size:13px}}
+.summary {{display:flex;gap:10px;flex-wrap:wrap}} .summary span {{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:12px}}
+.source-list {{display:grid;gap:12px}} .source-card {{background:var(--panel);border:1px solid var(--line);border-left:4px solid #94a3b8;border-radius:14px;padding:17px;box-shadow:0 8px 24px rgba(15,23,42,.05)}}
+.source-card.ok {{border-left-color:var(--ok)}} .source-card.warn {{border-left-color:var(--warn)}} .source-card.bad {{border-left-color:var(--bad)}}
+.source-head {{display:flex;justify-content:space-between;gap:15px;align-items:start}} .source-id {{font-weight:750;font-size:16px}} .source-region {{color:var(--muted);font-size:12px;margin-top:3px}}
+.badge {{padding:5px 9px;border-radius:999px;font-size:11px;font-weight:700;background:#f1f5f9;color:#475569}} .badge.ok {{background:#dcfce7;color:#166534}} .badge.warn {{background:#fef3c7;color:#92400e}} .badge.bad {{background:#fee2e2;color:#991b1b}}
+.source-grid {{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}} .source-grid span,.source-detail span {{display:block;color:var(--muted);font-size:11px}} .source-grid strong {{display:block;margin-top:4px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.source-detail {{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}} .source-detail p {{margin:5px 0 0;font-size:12px;color:var(--muted);word-break:break-word}}
+.empty {{padding:45px;text-align:center;background:var(--panel);border:1px dashed #cbd5e1;border-radius:14px}} .empty h2 {{margin:0;font-size:18px}} .empty p {{color:var(--muted);font-size:13px}}
+@media(max-width:700px) {{main{{padding:20px 14px}} .header{{align-items:start;flex-direction:column}} .source-grid{{grid-template-columns:1fr 1fr}}}}
+</style></head><body><main>
+<a class="back" href="/ui">← Обстановка</a>
+<header class="header"><div><h1>Источники</h1><p class="lead">Состояние реальных региональных модулей и последних опросов.</p></div>
+<div class="summary"><span>Всего: <strong>{len(configured)}</strong></span><span>Здоровы: <strong>{healthy}</strong></span><span>Проблемы: <strong>{problems}</strong></span></div></header>
+<section class="source-list">{cards}</section>
+</main></body></html>"""
+
 def render_alerts_page(
     service: AlertService,
     region: str | None = None,
@@ -330,7 +407,7 @@ select {{ min-width:230px; padding:10px 34px 10px 12px; border:1px solid #cbd5e1
       <div class="logo">A</div>
       <div><h1>AlertSRV</h1><p>Локальный центр предупреждений</p></div>
     </div>
-    {monitoring}
+    <div><a class="sources-nav" href="/ui/sources">Источники</a> &nbsp; {monitoring}</div>
   </header>
 
   <section class="hero">

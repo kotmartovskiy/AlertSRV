@@ -6,6 +6,9 @@ from urllib.request import urlopen
 from alertsrv.api import create_server
 from alertsrv.engine import AlertEngine
 from alertsrv.service import AlertService
+from alertsrv.regions.scheduler import RegionalScheduler, ScheduledSource
+from alertsrv.poller import PollResult, PollStatus
+from alertsrv.models import SourceHealth
 from tests.test_engine import event
 
 
@@ -61,6 +64,21 @@ class UITests(unittest.TestCase):
             self.assertEqual(getattr(exc, "code", None), 404)
         else:
             self.fail("expected HTTP 404")
+
+    def test_ui_sources_route_renders_scheduler_state(self):
+        class FakeScheduler:
+            regions = ()
+            def enabled_sources(self):
+                return (ScheduledSource("37", "mchs-ivanovo", 300),)
+            def last_results(self):
+                return {("37", "mchs-ivanovo"): PollResult("mchs-ivanovo", SourceHealth.HEALTHY, PollStatus.SUCCESS, ())}
+
+        self.service.attach_scheduler(FakeScheduler())
+        status, body = self.get("/ui/sources")
+        self.assertEqual(status, 200)
+        self.assertIn("mchs-ivanovo", body)
+        self.assertIn("Успешно", body)
+        self.assertIn("Ивановская область", body)
 
     def test_ui_filters_region_and_municipality(self):
         first = event("ui-2", "mchs-37")

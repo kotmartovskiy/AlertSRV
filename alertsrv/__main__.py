@@ -47,6 +47,7 @@ def main() -> None:
         enabled_regions = tuple(list_regions())
 
     scheduler = RegionalScheduler(SourcePoller(service.engine), enabled_regions)
+    service.attach_scheduler(scheduler)
     stop = threading.Event()
     scheduler.start()
     maintenance = threading.Thread(

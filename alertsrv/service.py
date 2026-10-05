@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .engine import AlertEngine
 from .models import Alert, AlertState, NormalizedEvent
 from .poller import EventSource, PollResult, SourcePoller
+
+if TYPE_CHECKING:
+    from .regions.scheduler import RegionalScheduler
 
 
 class AlertService:
@@ -28,6 +33,12 @@ class AlertService:
 
     def sources(self) -> dict[str, object]:
         return self.engine.source_health_all()
+
+    def attach_scheduler(self, scheduler: "RegionalScheduler") -> None:
+        self._scheduler = scheduler
+
+    def scheduler(self) -> "RegionalScheduler | None":
+        return getattr(self, "_scheduler", None)
 
     def active(self) -> list[Alert]:
         return self.engine.list_alerts(state=AlertState.ACTIVE)
