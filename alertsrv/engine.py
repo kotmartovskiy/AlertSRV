@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from threading import RLock
 from uuid import uuid4
 
+from .confidence import aggregate_confidence
 from .freshness import Freshness, FreshnessPolicy
 from .geography import area_from_dict, areas_compatible
 from .hazards import classify_hazard
@@ -128,6 +129,7 @@ class AlertEngine:
                     alert.expires_at = event.expires_at
 
         alert.evidence.append(evidence)
+        alert.confidence = aggregate_confidence(alert.evidence)
         resolution_state = self._resolution_state(event, authority)
         if (
             resolution_state is not None

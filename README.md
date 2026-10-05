@@ -61,6 +61,7 @@ The current vertical slice includes:
 - deterministic event deduplication;
 - correlation by adapter-provided `correlation_key`;
 - independent severity and confidence;
+- deterministic confidence/reliability aggregation: parser confidence is combined with source reliability, same-source reposts do not double-count, and independent corroboration raises confidence with diminishing returns;
 - explicit alert resolution and expiration;
 - separate source-health state;
 - one-worker regional scheduler with per-source intervals and failure isolation;

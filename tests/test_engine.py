@@ -27,7 +27,9 @@ class AlertEngineTests(unittest.TestCase):
         engine = AlertEngine(); first = engine.ingest(event("1", "weather-a", confidence=0.7))
         second = engine.ingest(event("abc", "emergency-b", severity=Severity.CRITICAL, confidence=0.95))
         self.assertIs(first, second); self.assertEqual(len(first.evidence), 2)
-        self.assertEqual(first.severity, Severity.CRITICAL); self.assertEqual(first.confidence, 0.95)
+        self.assertEqual(first.severity, Severity.CRITICAL)
+        self.assertGreater(first.confidence, 0.95)
+        self.assertLess(first.confidence, 1.0)
     def test_source_outage_does_not_resolve_alert(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a"))
         engine.set_source_health("weather-a", SourceHealth.UNAVAILABLE)

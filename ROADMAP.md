@@ -41,8 +41,9 @@ Completed:
 
 Current verified state:
 
-- 169 automated tests pass;
+- 177 automated tests pass;
 - regional modules are introduced as lazy, independently selectable source bundles; Ivanovo (`37`) is the first module;
+- deterministic confidence/reliability aggregation combines parser confidence with source reliability and independent corroboration without double-counting same-source reposts;
 - a single low-overhead scheduler polls only enabled regional modules using each source's declared interval and isolates source failures;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
