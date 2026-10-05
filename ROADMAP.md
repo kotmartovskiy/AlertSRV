@@ -35,11 +35,12 @@ Completed:
 - poll-batch validation prevents adapter source-identity/freshness errors from partially mutating alert state;
 - explicit source-authority mapping is attached by the current MChS, Rosgidromet emergency, hydrology, operational-headquarters and veterinary adapters;
 - structured affected-area hierarchy is implemented and used conservatively for correlation;
-- notification delivery state and an adapter contract/dispatcher are implemented; delivery failure is isolated from alert lifecycle.
+- notification delivery state and an adapter contract/dispatcher are implemented; delivery failure is isolated from alert lifecycle;
+- local JSONL notification adapter is implemented as the first deterministic transport.
 
 Current verified state:
 
-- 132 automated tests pass;
+- 134 automated tests pass;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
 - Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;
