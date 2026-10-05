@@ -50,7 +50,7 @@ The HTTP API is an input/output boundary around the service. It does not contain
 
 External source polling is organized by independently selectable regional modules. A regional module contains only the source definitions relevant to that region, including polling intervals, category coverage, and lazy adapter factories. Importing a module does not perform network requests; adapters are instantiated only when that region is enabled.
 
-This keeps a local deployment from polling unrelated regions and gives small ARM devices a bounded workload. The core aggregation engine remains shared across all regions, while region-specific URLs, parsers, authority rules, and source schedules stay outside the core. Ivanovo (`37`) is the first reference module.
+This keeps a local deployment from polling unrelated regions and gives small ARM devices a bounded workload. The core aggregation engine remains shared across all regions, while region-specific URLs, parsers, authority rules, and source schedules stay outside the core. Ivanovo (`37`) is the first reference module. A single low-overhead regional scheduler runs only the enabled modules, performs the first poll immediately, then follows each source's declared interval; a failed source is isolated and does not stop the scheduler.
 
 ## Current implementation
 
@@ -63,6 +63,7 @@ The current vertical slice includes:
 - independent severity and confidence;
 - explicit alert resolution and expiration;
 - separate source-health state;
+- one-worker regional scheduler with per-source intervals and failure isolation;
 - `AlertService` application boundary;
 - SQLite persistence behind `AlertStore`;
 - restart recovery of alerts, evidence, event deduplication and source health;

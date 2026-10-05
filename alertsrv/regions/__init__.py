@@ -1,5 +1,6 @@
 from .base import RegionModule, RegionSourceSpec
 from .ivanovo import IVANOVO_REGION
+from .scheduler import RegionalScheduler, ScheduledSource
 
 _REGIONS: dict[str, RegionModule] = {
     IVANOVO_REGION.region_code: IVANOVO_REGION,
