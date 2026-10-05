@@ -17,6 +17,39 @@ def test_parser_extracts_emergency_items():
     ]
 
 
+def test_emergency_fetch_marks_malformed_items_degraded():
+    html = """
+    <div class="item">
+      <div class="date"><div class="in">5 октября 2026 [12:30]</div></div>
+      <div class="text"><div class="in">Опасное явление: сильный ветер.</div></div>
+    </div>
+    <div class="item">
+      <div class="date"><div class="in">broken date</div></div>
+      <div class="text"><div class="in">Ещё одно сообщение.</div></div>
+    </div>
+    """
+    adapter = RosgidrometEmergencyAdapter()
+    class Response:
+        def read(self):
+            return html.encode("utf-8")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    import alertsrv.adapters.rosgidromet as module
+    original = module.urlopen
+    module.urlopen = lambda *args, **kwargs: Response()
+    try:
+        result = adapter.fetch()
+    finally:
+        module.urlopen = original
+
+    assert len(result.events) == 1
+    assert result.parser_degraded is True
+    assert "malformed" in result.detail
+
+
 def test_adapter_date_parser():
     value = RosgidrometEmergencyAdapter._parse_date("5 октября 2026 [12:30]")
     assert value == datetime(2026, 10, 5, 12, 30, tzinfo=timezone.utc)

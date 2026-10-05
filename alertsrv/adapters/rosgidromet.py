@@ -73,9 +73,11 @@ class RosgidrometEmergencyAdapter:
             parser = _EmergencyParser()
             parser.feed(response.read().decode("utf-8", "replace"))
         events = []
+        skipped_items = 0
         for published, body in parser.items:
             occurred_at = self._parse_date(published)
             if occurred_at is None or not body:
+                skipped_items += 1
                 continue
             stable = f"{occurred_at.isoformat()}:{body}"
             digest = hashlib.sha256(stable.encode("utf-8")).hexdigest()[:24]
@@ -97,7 +99,15 @@ class RosgidrometEmergencyAdapter:
                 category=EventCategory(category),
                 subtype=subtype,
             ))
-        return SourceFetchResult(events=tuple(events))
+        detail = None
+        parser_degraded = skipped_items > 0
+        if parser_degraded:
+            detail = f"skipped {skipped_items} malformed emergency feed item(s)"
+        return SourceFetchResult(
+            events=tuple(events),
+            parser_degraded=parser_degraded,
+            detail=detail,
+        )
 
     @staticmethod
     def _parse_date(value: str) -> datetime | None:
