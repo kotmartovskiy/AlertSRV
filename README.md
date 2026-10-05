@@ -34,6 +34,10 @@ AlertEngine
           +--> evidence[]
           +--> transition_history[]
           |
+          +--> NotificationDispatcher
+          |       +--> file/local adapter
+          |       +--> future external adapters
+          |
           v
        AlertStore
           |
@@ -59,9 +63,13 @@ The current vertical slice includes:
 - standard-library HTTP API;
 - HTTP event ingestion;
 - deterministic test adapter;
+- source-authority mapping for current official adapter families;
+- structured affected-area hierarchy;
+- notification delivery state with independent per-channel failure handling;
+- local JSONL file notification adapter;
 - automated tests.
 
-The project currently has no external production source adapter and no notification channel.
+External notification channels are intentionally not connected yet. The file adapter provides a local, deterministic transport for integration and diagnostics without introducing network credentials or external side effects.
 
 ## Alert lifecycle
 
