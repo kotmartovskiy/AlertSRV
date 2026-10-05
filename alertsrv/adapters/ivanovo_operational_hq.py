@@ -201,8 +201,18 @@ class IvanovoOperationalHQAdapter:
 
     def fetch(self) -> SourceFetchResult:
         events: list[NormalizedEvent] = []
+        failed_pages = 0
         for url, lastmod in self._sitemap_urls():
-            html = self._fetch(url).decode("utf-8", errors="replace")
+            try:
+                html = self._fetch(url).decode("utf-8", errors="replace")
+            except Exception:
+                # A single article being unavailable must not hide usable
+                # evidence from the remaining official pages. Keep the source
+                # visible as degraded so callers do not mistake partial data
+                # for a complete successful scan.
+                failed_pages += 1
+                continue
+
             title_match = _TITLE_RE.search(html)
             title = _clean_html(title_match.group(1)) if title_match else ""
             if not re.search(r"оперативн(?:ый|ого) штаб", title, re.I):
@@ -214,5 +224,12 @@ class IvanovoOperationalHQAdapter:
                     observed_at=lastmod,
                     source_id=self.source_id,
                 )
+            )
+
+        if failed_pages:
+            return SourceFetchResult(
+                events=tuple(events),
+                parser_degraded=True,
+                detail=f"{failed_pages} official operational page(s) could not be fetched",
             )
         return SourceFetchResult(events=tuple(events))

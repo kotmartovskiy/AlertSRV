@@ -142,6 +142,27 @@ class IvanovoOperationalHQTests(unittest.TestCase):
         rows = adapter._sitemap_urls()
         self.assertEqual([url for url, _ in rows], ["https://example.test/new", "https://example.test/old"])
 
+    def test_partial_page_fetch_failure_marks_source_degraded(self):
+        class FakeAdapter(IvanovoOperationalHQAdapter):
+            def _sitemap_urls(self):
+                return [
+                    ("https://example.test/ok", datetime(2026, 10, 5, 6, 40, tzinfo=UTC)),
+                    ("https://example.test/fail", datetime(2026, 10, 5, 6, 39, tzinfo=UTC)),
+                ]
+
+            def _fetch(self, url):
+                if url.endswith("/fail"):
+                    raise OSError("503 Service Unavailable")
+                return '''<html><head>
+                <title>Информация оперативного штаба Ивановской области</title>
+                <meta name="description" content="Объявлена ракетная опасность.">
+                </head></html>'''.encode("utf-8")
+
+        result = FakeAdapter().fetch()
+        self.assertEqual(len(result.events), 1)
+        self.assertTrue(result.parser_degraded)
+        self.assertIn("1 official operational page", result.detail)
+
     def test_adapter_exposes_source_id(self):
         adapter = IvanovoOperationalHQAdapter()
         self.assertEqual(adapter.source_id, "ivanovo-operational-hq")
