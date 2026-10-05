@@ -3,48 +3,31 @@ from __future__ import annotations
 import argparse
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
+
 from http.server import ThreadingHTTPServer
 
 from .api import create_server
 from .engine import AlertEngine
-from .models import SourceHealth
+
 from .service import AlertService
 from .storage import SQLiteAlertStore
-from .adapters.mchs_catalog import MchsRegionalCatalog
-from .adapters.mchs_rss import GENERAL_RSS_TEMPLATE, MchsRssAdapter
-from .adapters.ivanovo_operational_hq import IvanovoOperationalHQAdapter
-from .adapters.ivanovo_veterinary import IvanovoVeterinaryRegistryAdapter
-from .adapters.rosgidromet import RosgidrometEmergencyAdapter
+from .poller import SourcePoller
+from .regions import get_region, list_regions
+from .regions.scheduler import RegionalScheduler
+
 
 log = logging.getLogger("alertsrv")
 
 
-def poll_once(service: AlertService, adapters: list[object], workers: int = 8) -> None:
-    def fetch(adapter: object) -> tuple[str, list, bool]:
-        try:
-            return adapter.source_id, adapter.fetch(), True
-        except Exception:
-            log.exception("source=%s poll failed", adapter.source_id)
-            return adapter.source_id, [], False
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(fetch, adapter) for adapter in adapters]
-        for adapter, future in zip(adapters, futures):
-            source_id, events, ok = future.result()
-            if ok:
-                for event in events:
-                    service.accept(event)
-                service.engine.set_source_health(source_id, SourceHealth.HEALTHY)
-            else:
-                service.engine.set_source_health(source_id, SourceHealth.UNAVAILABLE)
-            log.info("source=%s fetched=%d", source_id, len(events))
-    service.expire()
 
 
-def run_poller(service: AlertService, adapters: list[object], interval: float, workers: int, stop: threading.Event) -> None:
-    while not stop.wait(interval):
-        poll_once(service, adapters, workers)
+
+
+
+
+def run_maintenance(service: AlertService, stop: threading.Event) -> None:
+    while not stop.wait(60.0):
+        service.expire()
 
 
 def main() -> None:
@@ -52,43 +35,28 @@ def main() -> None:
     parser.add_argument("--db", default="alertsrv.sqlite3")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8090)
-    parser.add_argument("--interval", type=float, default=900.0)
     parser.add_argument("--regions", choices=("all", "ivanovo"), default="all")
-    parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     store = SQLiteAlertStore(args.db)
     service = AlertService(AlertEngine(store=store))
 
     if args.regions == "ivanovo":
-        adapters: list[object] = [
-            MchsRssAdapter(),
-            IvanovoOperationalHQAdapter(),
-            IvanovoVeterinaryRegistryAdapter(),
-        ]
+        enabled_regions = (get_region("37"),)
     else:
-        regions = MchsRegionalCatalog().discover()
-        adapters = [
-            MchsRssAdapter(
-                region.rss_url,
-                source_id=f"mchs-{region.code}",
-                general_fallback_url=GENERAL_RSS_TEMPLATE.format(code=region.code),
-            )
-            for region in regions
-        ]
-        adapters.append(RosgidrometEmergencyAdapter())
-        adapters.append(IvanovoOperationalHQAdapter())
-        adapters.append(IvanovoVeterinaryRegistryAdapter())
-        log.info("discovered %d official regional MChS sites plus Rosgidromet", len(adapters) - 3)
+        enabled_regions = tuple(list_regions())
 
+    scheduler = RegionalScheduler(SourcePoller(service.engine), enabled_regions)
     stop = threading.Event()
-    poll_once(service, adapters, args.workers)
-    poller = threading.Thread(
-        target=run_poller,
-        args=(service, adapters, args.interval, args.workers, stop),
+    scheduler.start()
+    maintenance = threading.Thread(
+        target=run_maintenance,
+        args=(service, stop),
+        name="alertsrv-maintenance",
         daemon=True,
     )
-    poller.start()
+    maintenance.start()
+
     server: ThreadingHTTPServer = create_server(service, host=args.host, port=args.port)
     log.info("AlertSRV listening on %s:%d", args.host, server.server_port)
     try:
@@ -99,7 +67,8 @@ def main() -> None:
         stop.set()
         server.shutdown()
         server.server_close()
-        poller.join(timeout=2)
+        scheduler.stop(timeout=2)
+        maintenance.join(timeout=1)
         store.close()
 
 
