@@ -38,6 +38,29 @@ class UITests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("AlertSRV", body)
         self.assertIn("Лежневский район", body)
+        self.assertIn("/ui/alerts/", body)
+
+    def test_ui_alert_detail_renders_timeline_and_sources(self):
+        source = event("ui-detail-1", "mchs-37")
+        source.payload.update({
+            "scope": "region",
+            "region_code": "37",
+            "affected_areas": [{"level": "municipality", "name": "Лежневский район"}],
+        })
+        alert = self.service.accept(source)
+        status, body = self.get("/ui/alerts/" + quote(alert.alert_id))
+        self.assertEqual(status, 200)
+        self.assertIn("Лежневский район", body)
+        self.assertIn("mchs-37", body)
+        self.assertIn("Хронология", body)
+
+    def test_ui_alert_detail_missing_returns_404(self):
+        try:
+            self.get("/ui/alerts/not-found")
+        except Exception as exc:
+            self.assertEqual(getattr(exc, "code", None), 404)
+        else:
+            self.fail("expected HTTP 404")
 
     def test_ui_filters_region_and_municipality(self):
         first = event("ui-2", "mchs-37")

@@ -120,7 +120,7 @@ def _alert_card(alert: Alert) -> str:
     region = REGION_NAMES.get(_region_code(alert) or "", "Регион не указан")
     title = escape(alert.title or "Без названия")
     return f"""
-    <article class="alert-card {severity}">
+    <a class="alert-link" href="/ui/alerts/{escape(alert.alert_id)}"><article class="alert-card {severity}">
       <div class="alert-top">
         <span class="severity-dot" aria-hidden="true"></span>
         <span class="severity">{escape(_severity_label(alert.severity.value))}</span>
@@ -136,9 +136,71 @@ def _alert_card(alert: Alert) -> str:
         <div><span>Надёжность</span><strong>{alert.confidence:.0%}</strong></div>
         <div><span>Источников</span><strong>{len(alert.evidence)}</strong></div>
       </div>
-    </article>
+    </article></a>
     """
 
+
+def render_alert_detail_page(service: AlertService, alert_id: str) -> str:
+    alert = service.get(alert_id)
+    region = REGION_NAMES.get(_region_code(alert) or "", "Регион не указан")
+    areas = _alert_areas(alert)
+    evidence_rows = []
+    for evidence in sorted(alert.evidence, key=lambda item: item.received_at, reverse=True):
+        evidence_rows.append(
+            f"""<div class="evidence">
+              <div><strong>{escape(evidence.source_id)}</strong><span>{escape(evidence.received_at.strftime("%d.%m.%Y %H:%M"))}</span></div>
+              <p>{escape(evidence.title or "Без названия")}</p>
+              <small>Уверенность источника: {evidence.confidence:.0%}</small>
+            </div>"""
+        )
+    timeline_rows = []
+    for old_state, new_state, at, reason in reversed(alert.transition_history):
+        timeline_rows.append(
+            f"""<div class="timeline-item">
+              <span class="timeline-dot"></span>
+              <div><strong>{escape(_state_label(new_state.value))}</strong>
+              <span>{escape(at.strftime("%d.%m.%Y %H:%M"))}</span>
+              <p>{escape(reason)}</p></div>
+            </div>"""
+        )
+    areas_html = "".join(f"<li>{escape(area)}</li>" for area in areas) or "<li>Не указаны</li>"
+    evidence_html = "".join(evidence_rows) or '<p class="muted">Доказательств нет.</p>'
+    timeline_html = "".join(timeline_rows) or '<p class="muted">История переходов отсутствует.</p>'
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AlertSRV — {escape(alert.title or "Предупреждение")}</title>
+<style>
+:root {{ --bg:#f5f7fa;--panel:#fff;--text:#111827;--muted:#64748b;--line:#e2e8f0;--critical:#dc2626;--warning:#d97706;--info:#2563eb;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }}
+* {{box-sizing:border-box}} body {{margin:0;background:var(--bg);color:var(--text)}} main {{max-width:900px;margin:auto;padding:24px 18px 50px}}
+.back {{display:inline-block;margin-bottom:18px;color:#2563eb;text-decoration:none;font-size:13px;font-weight:600}}
+.panel {{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 10px 30px rgba(15,23,42,.06);margin-bottom:14px}}
+.head {{border-top:4px solid var(--info)}} .head.critical {{border-top-color:var(--critical)}} .head.warning {{border-top-color:var(--warning)}}
+.kicker {{font-size:12px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}}
+h1 {{font-size:29px;line-height:1.2;margin:9px 0}} h2 {{font-size:18px;margin:0 0 14px}}
+.meta {{color:var(--muted);font-size:13px}} .chips {{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}}
+.chip {{padding:6px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#f8fafc}}
+.metrics {{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:20px}} .metric {{border-top:1px solid var(--line);padding-top:10px}}
+.metric span,.evidence span,.timeline-item span {{display:block;color:var(--muted);font-size:11px}} .metric strong {{display:block;margin-top:3px;font-size:16px}}
+.evidence {{padding:13px 0;border-top:1px solid var(--line)}} .evidence:first-child {{border-top:0}} .evidence div {{display:flex;justify-content:space-between;gap:12px}} .evidence p {{margin:5px 0;font-size:13px}} .evidence small {{color:var(--muted)}}
+ul {{margin:0;padding-left:20px;color:var(--muted);font-size:13px}} .timeline-item {{display:flex;gap:12px;padding:0 0 18px}} .timeline-dot {{width:9px;height:9px;border-radius:50%;background:#2563eb;margin-top:5px;flex:0 0 auto}} .timeline-item strong {{font-size:13px}} .timeline-item p {{margin:4px 0 0;color:var(--muted);font-size:12px}} .muted {{color:var(--muted);font-size:13px}}
+@media(max-width:650px) {{.metrics{{grid-template-columns:1fr 1fr}} h1{{font-size:24px}}}}
+</style></head><body><main>
+<a class="back" href="/ui">← Все активные предупреждения</a>
+<section class="panel head {_severity_class(alert.severity.value)}">
+<div class="kicker">{escape(_severity_label(alert.severity.value))} · {escape(_state_label(alert.state.value))}</div>
+<h1>{escape(alert.title or "Без названия")}</h1>
+<div class="meta">{escape(region)} · обновлено {escape(alert.updated_at.strftime("%d.%m.%Y %H:%M"))}</div>
+<div class="chips"><span class="chip">ID: {escape(alert.alert_id)}</span><span class="chip">Correlation: {escape(alert.correlation_key)}</span></div>
+<div class="metrics">
+<div class="metric"><span>Уверенность</span><strong>{alert.confidence:.0%}</strong></div>
+<div class="metric"><span>Источников</span><strong>{len(alert.evidence)}</strong></div>
+<div class="metric"><span>Начало</span><strong>{escape(alert.started_at.strftime("%d.%m.%Y %H:%M"))}</strong></div>
+<div class="metric"><span>Истекает</span><strong>{escape(alert.expires_at.strftime("%d.%m.%Y %H:%M") if alert.expires_at else "—")}</strong></div>
+</div></section>
+<section class="panel"><h2>Зона действия</h2><ul>{areas_html}</ul></section>
+<section class="panel"><h2>Источники и доказательства</h2>{evidence_html}</section>
+<section class="panel"><h2>Хронология</h2>{timeline_html}</section>
+</main></body></html>"""
 
 def render_alerts_page(
     service: AlertService,

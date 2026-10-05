@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 from .models import EventCategory, NormalizedEvent, ResolutionType, Severity
 from .serialization import alert_to_dict
 from .service import AlertService
-from .ui import render_alerts_page
+from .ui import render_alert_detail_page, render_alerts_page
 
 
 def _parse_event(data: dict) -> NormalizedEvent:
@@ -86,6 +86,19 @@ class AlertAPIHandler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
+            return
+        if path.startswith("/ui/alerts/"):
+            alert_id = path.rsplit("/", 1)[-1]
+            try:
+                body = render_alert_detail_page(self.service, alert_id).encode("utf-8")
+            except KeyError:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if path == "/ui":
             query = parse_qs(parsed.query)
