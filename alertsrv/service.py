@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .engine import AlertEngine
 from .models import Alert, AlertState, NormalizedEvent
+from .poller import EventSource, PollResult, SourcePoller
 
 
 class AlertService:
@@ -15,6 +16,9 @@ class AlertService:
 
     def resolve(self, alert_id: str, reason: str = "manual resolution") -> Alert:
         return self.engine.resolve(alert_id, reason=reason)
+
+    def poll(self, source: EventSource) -> PollResult:
+        return SourcePoller(self.engine).poll(source)
 
     def expire(self) -> list[Alert]:
         return self.engine.expire()

@@ -1,33 +1,42 @@
 # AlertSRV roadmap
 
-## Current milestone: real warning service
+## Current milestone: reliable multi-source warning service
 
 Completed:
 
-- deterministic core lifecycle and persistence;
+- deterministic core lifecycle and SQLite persistence;
 - strict normalized-event HTTP contract;
 - official Ivanovo MChS warning adapter;
 - official regional MChS catalog discovery;
 - national MChS polling mode;
-- general operational RSS fallback when a dedicated warning RSS endpoint is unavailable;
+- general operational RSS fallback;
 - warning validity-date expiration extraction;
-- source-health reporting;
+- source-health reporting and durable source-health state;
+- generic Source Poller lifecycle:
+  - successful poll with zero events => HEALTHY;
+  - transport/fetch failure => UNAVAILABLE;
+  - successful fetch with invalid/uningestable data => DEGRADED;
+  - source recovery => HEALTHY;
+  - source failure never resolves an alert;
 - runnable local runtime and Linux/systemd deployment unit;
 - official Rosgidromet national emergency-information adapter;
 - regional scope and hazard classification;
 - conservative cross-source regional correlation;
 - region filtering in the HTTP API;
-- initial public-safety taxonomy for air threats, emergency regimes and quarantine.
+- public-safety taxonomy for air threats, emergency regimes and quarantine;
+- dedicated Ivanovo operational-headquarters adapter for drone/missile danger and explicit all-clear events;
+- regional-government source catalog;
+- Ivanovo veterinary/quarantine registry adapter with affected-area extraction;
+- structured Rosgidromet hydrology adapter with current-bulletin discovery and explicit forecast expiry where available.
 
 Current verified state:
 
-- 46 automated tests pass before the current taxonomy test expansion;
-- official MChS catalog resolves 89 regional sites including Moscow;
-- national MChS polling and Rosgidromet live fetches were previously verified;
-- official Ivanovo sources were verified for drone-danger warnings and all-clear messages;
-- official Ivanovo civil-defense material was verified for missile-danger signaling;
-- official Ivanovo government/veterinary publications were verified for quarantine and emergency-regime information;
-- API remains localhost-only during runtime tests;
+- 97 automated tests pass;
+- official Ivanovo air-threat source is parsed for warning and all-clear messages;
+- official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
+- Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;
+- the latest verified hydrology fetch produced 39 events, including 5 with explicit expiry;
+- source outage and source recovery are independent from alert resolution;
 - tests use temporary/local state and do not modify user data.
 
 ## Public safety scope
@@ -52,17 +61,16 @@ The semantic taxonomy is documented in docs/PUBLIC_SAFETY_TAXONOMY.md.
 
 ## Next work
 
-1. Add a dedicated Ivanovo official operational-headquarters adapter for drone/missile danger and explicit all-clear events.
-2. Add a regional-government source catalog so the same adapter pattern can be extended beyond Ivanovo.
-3. Add official veterinary/quarantine source adapters and preserve the exact affected municipality/settlement.
-4. Add a dedicated Rosgidromet hydrology adapter with structured water-body/observation-point data.
-5. Extend geographic representation from region_code to a structured affected_area hierarchy:
+1. Separate extraction confidence from source authority/reliability without breaking existing adapters or persisted alerts.
+2. Extend geographic representation from region_code to a structured affected_area hierarchy:
    federal -> region -> municipality -> settlement -> local_area.
-6. Add contradiction and cancellation semantics for safety-critical warnings.
-7. Add notification delivery state and adapters.
-8. Add a small local UI showing active warnings by selected region and municipality.
-9. Add operational retention, backup/repair and schema migration procedures.
-10. Add broader national source coverage only after each source family has deterministic tests.
+3. Add contradiction and cancellation semantics for safety-critical warnings.
+4. Add notification delivery state and adapters.
+5. Add a small local UI showing active warnings by selected region and municipality.
+6. Add operational retention, backup/repair and schema migration procedures.
+7. Add broader national source coverage only after each source family has deterministic tests.
+8. Add source-specific freshness/degradation metadata where an adapter can distinguish:
+   successful empty result, stale upstream data, parser degradation, and transport failure.
 
 ## Safety-critical source policy
 
@@ -71,3 +79,5 @@ Air-threat alerts must preserve original wording, publication time, source URL/c
 Unofficial reports may be useful as corroborating evidence in the future, but cannot automatically become high-confidence alerts.
 
 The national service must distinguish raw observations from logical threats: one event can have multiple independent pieces of evidence, and one source can report many observations about the same underlying threat.
+
+Source lifecycle is separate from alert lifecycle. A source being unavailable, degraded, or recovered is operational evidence about the source, not evidence that an underlying threat ended.
