@@ -47,19 +47,24 @@ def aggregate_confidence(
 ) -> float:
     """Combine independent current observations conservatively.
 
-    Only the newest non-resolution observation from each source contributes.
-    Additional independent sources raise confidence with diminishing returns;
-    reposts from the same source do not. The result is intentionally a bounded
-    evidence score rather than a statistical probability.
+    Only the newest non-resolution observation from each publisher group
+    contributes. Additional independent publishers raise confidence with
+    diminishing returns; reposts or mirrors from one publisher do not. The
+    result is intentionally a bounded evidence score rather than a statistical
+    probability.
     """
     policy = policy or ConfidencePolicy()
+    # A publisher group represents one underlying publisher. Different
+    # adapters (for example a site and a mirror/channel) must not count as
+    # independent confirmation when they carry the same publisher_id.
     latest: dict[str, Evidence] = {}
     for item in evidence:
         if item.payload.get("resolved") is True:
             continue
-        previous = latest.get(item.source_id)
+        publisher_id = item.payload.get("publisher_id") or item.source_id
+        previous = latest.get(publisher_id)
         if previous is None or item.received_at >= previous.received_at:
-            latest[item.source_id] = item
+            latest[publisher_id] = item
 
     if not latest:
         return 0.0

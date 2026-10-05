@@ -134,6 +134,7 @@ def parse_operational_page(
                     "resolved": resolved,
                     "resolution_type": "all_clear" if resolved else "warning",
                     "source_kind": "official_regional_operational_hq",
+                    "publisher_id": "ivanovo-regional-government",
                 },
                 resolved=resolved,
                 category=EventCategory.AIR_THREAT,

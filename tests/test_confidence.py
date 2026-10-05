@@ -40,6 +40,24 @@ class ConfidenceTests(unittest.TestCase):
         self.assertGreater(two, one)
         self.assertLess(two, 1.0)
 
+    def test_same_publisher_mirrors_do_not_double_count(self):
+        one = aggregate_confidence([evidence("site", 0.90)])
+        mirror = evidence("telegram", 0.90, kind="official_regional_operational_hq", minutes=1)
+        mirror.payload["publisher_id"] = "ivanovo-hq"
+        site = evidence("site", 0.90)
+        site.payload["publisher_id"] = "ivanovo-hq"
+        two = aggregate_confidence([site, mirror])
+        self.assertAlmostEqual(one, two, places=9)
+
+    def test_latest_observation_wins_within_publisher_group(self):
+        old = evidence("site", 0.40)
+        old.payload["publisher_id"] = "ivanovo-hq"
+        new = evidence("telegram", 0.90, kind="official_civil_defense", minutes=1)
+        new.payload["publisher_id"] = "ivanovo-hq"
+        value = aggregate_confidence([old, new])
+        expected = aggregate_confidence([new])
+        self.assertAlmostEqual(value, expected, places=9)
+
     def test_unofficial_source_cannot_outrank_primary(self):
         primary = aggregate_confidence([evidence("hq", 0.90)])
         unofficial = aggregate_confidence([evidence("telegram", 0.99, kind="unofficial_feed")])

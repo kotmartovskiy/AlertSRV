@@ -49,7 +49,8 @@ def parse_telegram_preview(html: str, *, observed_at: datetime, max_age: timedel
             payload={"url": f"https://t.me/{post}", "text": text, "region_code": "37",
                      "scope": "region", "category": "air_threat", "subtype": subtype,
                      "resolved": resolved, "resolution_type": "all_clear" if resolved else "warning",
-                     "source_kind": "official_regional_operational_hq", "channel": "ivanovoobl"},
+                     "source_kind": "official_regional_operational_hq",
+                     "publisher_id": "ivanovo-regional-government", "channel": "ivanovoobl"},
             resolved=resolved, category=EventCategory.AIR_THREAT, subtype=subtype,
             resolution_type=ResolutionType.ALL_CLEAR if resolved else None,
         ))

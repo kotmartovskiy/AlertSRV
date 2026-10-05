@@ -185,9 +185,11 @@ Automatic geographic, temporal, textual or semantic correlation is intentionally
 
 ### Confidence
 
-The engine currently keeps the maximum observed confidence.
+Confidence is a bounded, deterministic evidence score, **not a statistically calibrated probability**.
 
-This is a deterministic placeholder, **not a statistically calibrated probability model**. Future aggregation should account for source reliability and evidence quality.
+The engine combines parser confidence with source reliability. Only the newest non-resolution observation from each publisher group contributes, so reposts or mirrors from one underlying publisher do not count as independent confirmation. Independent publishers raise confidence with diminishing returns.
+
+`publisher_id` is optional: when absent, `source_id` is used as the publisher group. This keeps legacy adapters compatible while allowing multiple adapters for one real publisher to share a group.
 
 ### Severity
 
