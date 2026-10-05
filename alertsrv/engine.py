@@ -111,7 +111,7 @@ class AlertEngine:
 
         alert.evidence.append(evidence)
         if (
-            event.resolved
+            self._can_resolve_event(event, authority.authority.value)
             and alert.state == AlertState.ACTIVE
             and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
         ):
@@ -193,6 +193,19 @@ class AlertEngine:
             if state is not None:
                 alerts = [a for a in alerts if a.state == state]
             return sorted(alerts, key=lambda a: a.started_at)
+
+    @staticmethod
+    def _can_resolve_event(event: NormalizedEvent, authority: str) -> bool:
+        """Require explicit authoritative clearance for safety-critical alerts."""
+        if not event.resolved:
+            return False
+        category = event.payload.get("category")
+        if category in {"air_threat", "emergency_mode", "public_safety"}:
+            return (
+                authority == "official_primary"
+                and event.payload.get("resolution_type") in {"all_clear", "cancel"}
+            )
+        return True
 
     @staticmethod
     def _all_sources_resolved(alert: Alert, *, resolved_event_id: str) -> bool:

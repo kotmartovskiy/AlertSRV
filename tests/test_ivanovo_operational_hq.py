@@ -30,7 +30,39 @@ class IvanovoOperationalHQTests(unittest.TestCase):
         self.assertTrue(events[1].resolved)
         self.assertEqual(events[0].payload["subtype"], "drone_warning")
         self.assertEqual(events[1].payload["subtype"], "drone_warning")
+        self.assertEqual(events[0].payload["resolution_type"], "warning")
+        self.assertEqual(events[1].payload["resolution_type"], "all_clear")
         self.assertEqual(events[0].correlation_key, events[1].correlation_key)
+
+    def test_safety_critical_clear_without_explicit_resolution_type_does_not_resolve(self):
+        html = """<html><head><title>Информация оперативного штаба Ивановской области</title>
+        <meta name="description" content="Обновление по состоянию на 06:33: Отбой опасности БПЛА.
+        Обновление по состоянию на 05:40: В регионе сохраняется режим опасности БПЛА."></head></html>"""
+        events = parse_operational_page(
+            html,
+            url="https://ivanovoobl.ru/?id=77120&type=news",
+            observed_at=datetime(2026, 10, 5, 6, 40, tzinfo=UTC),
+        )
+        events[1].payload.pop("resolution_type")
+        engine = AlertEngine()
+        alert = engine.ingest(events[0])
+        engine.ingest(events[1])
+        self.assertEqual(alert.state.value, "active")
+
+    def test_safety_critical_unofficial_clear_does_not_resolve(self):
+        html = """<html><head><title>Информация оперативного штаба Ивановской области</title>
+        <meta name="description" content="Обновление по состоянию на 06:33: Отбой опасности БПЛА.
+        Обновление по состоянию на 05:40: В регионе сохраняется режим опасности БПЛА."></head></html>"""
+        events = parse_operational_page(
+            html,
+            url="https://ivanovoobl.ru/?id=77119&type=news",
+            observed_at=datetime(2026, 10, 5, 6, 40, tzinfo=UTC),
+        )
+        events[1].payload["source_kind"] = "unknown"
+        engine = AlertEngine()
+        alert = engine.ingest(events[0])
+        engine.ingest(events[1])
+        self.assertEqual(alert.state.value, "active")
 
     def test_engine_resolves_warning_when_page_is_replayed(self):
         html = '''

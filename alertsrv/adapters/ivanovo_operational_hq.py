@@ -131,6 +131,7 @@ def parse_operational_page(
                     "category": category,
                     "subtype": subtype,
                     "resolved": resolved,
+                    "resolution_type": "all_clear" if resolved else "warning",
                     "source_kind": "official_regional_operational_hq",
                 },
                 resolved=resolved,
