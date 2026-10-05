@@ -49,6 +49,38 @@ class SQLitePersistenceTests(unittest.TestCase):
             self.assertEqual(len(duplicate.evidence), 1)
             store.close()
 
+    def test_explicit_supersession_reference_resolves_after_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f"{directory}/alerts.db"
+            store = SQLiteAlertStore(path)
+            engine = AlertEngine(store=store)
+            old = engine.ingest(event("old", "official-hq", correlation_key="old"))
+            replacement = engine.ingest(event("replacement", "official-hq", correlation_key="replacement"))
+            store.close()
+
+            store = SQLiteAlertStore(path)
+            restored = AlertEngine(store=store)
+            cleared = event(
+                "clear-old",
+                "official-hq",
+                correlation_key="old",
+                resolved=True,
+                received_offset=5,
+            )
+            cleared.payload.update({
+                "category": "public_safety",
+                "source_kind": "official_mchs",
+                "resolution_type": "superseded",
+                "replacement_event_id": "replacement",
+            })
+            restored.ingest(cleared)
+            restored_old = restored.get(old.alert_id)
+            restored_replacement = restored.get(replacement.alert_id)
+            self.assertEqual(restored_old.state, AlertState.SUPERSEDED)
+            self.assertEqual(restored_old.superseded_by, replacement.alert_id)
+            self.assertEqual(restored_replacement.supersedes_alert_id, old.alert_id)
+            store.close()
+
     def test_resolve_and_expire_are_persisted(self):
         with tempfile.TemporaryDirectory() as directory:
             path = f"{directory}/alerts.db"

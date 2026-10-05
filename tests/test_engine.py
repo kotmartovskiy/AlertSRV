@@ -172,6 +172,53 @@ class AlertEngineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             engine.supersede(old.alert_id, replacement.alert_id)
 
+    def test_explicit_supersession_event_links_to_replacement_by_source_event(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "official-hq", correlation_key="old"))
+        replacement = engine.ingest(event("replacement", "official-hq", correlation_key="replacement"))
+        cleared = event("clear-old", "official-hq", correlation_key="old", resolved=True, received_offset=5)
+        cleared.payload.update({
+            "category": "public_safety",
+            "source_kind": "official_mchs",
+            "resolution_type": "superseded",
+            "replacement_event_id": "replacement",
+        })
+        result = engine.ingest(cleared)
+        self.assertIs(result, old)
+        self.assertEqual(old.state, AlertState.SUPERSEDED)
+        self.assertEqual(old.superseded_by, replacement.alert_id)
+        self.assertEqual(replacement.supersedes_alert_id, old.alert_id)
+
+    def test_explicit_supersession_reference_to_unknown_event_does_not_close_alert(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "official-hq", correlation_key="old"))
+        cleared = event("clear-old", "official-hq", correlation_key="old", resolved=True, received_offset=5)
+        cleared.payload.update({
+            "category": "public_safety",
+            "source_kind": "official_mchs",
+            "resolution_type": "superseded",
+            "replacement_event_id": "missing",
+        })
+        engine.ingest(cleared)
+        self.assertEqual(old.state, AlertState.ACTIVE)
+        self.assertIsNone(old.superseded_by)
+
+    def test_explicit_supersession_reference_to_terminal_alert_is_rejected(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "official-hq", correlation_key="old"))
+        replacement = engine.ingest(event("replacement", "official-hq", correlation_key="replacement"))
+        engine.resolve(replacement.alert_id)
+        cleared = event("clear-old", "official-hq", correlation_key="old", resolved=True, received_offset=5)
+        cleared.payload.update({
+            "category": "public_safety",
+            "source_kind": "official_mchs",
+            "resolution_type": "superseded",
+            "replacement_event_id": "replacement",
+        })
+        with self.assertRaises(ValueError):
+            engine.ingest(cleared)
+        self.assertEqual(old.state, AlertState.ACTIVE)
+
     def test_older_event_cannot_move_updated_at_backwards(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a", received_offset=10))
         engine.ingest(event("2", "weather-b", received_offset=5))

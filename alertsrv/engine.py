@@ -117,12 +117,21 @@ class AlertEngine:
             and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
         ):
             resolution_type = event.payload.get("resolution_type", "resolved")
-            self._transition(
-                alert,
-                resolution_state,
-                event.received_at,
-                f"all contributing sources {resolution_type}",
-            )
+            replacement_alert_id = self._explicit_replacement_alert_id(event)
+            has_explicit_replacement = bool(event.payload.get("replacement_event_id"))
+            if resolution_state == AlertState.SUPERSEDED and replacement_alert_id is not None:
+                self._supersede_locked(
+                    alert.alert_id,
+                    replacement_alert_id,
+                    reason=f"all contributing sources {resolution_type}",
+                )
+            elif resolution_state != AlertState.SUPERSEDED or not has_explicit_replacement:
+                self._transition(
+                    alert,
+                    resolution_state,
+                    event.received_at,
+                    f"all contributing sources {resolution_type}",
+                )
 
         self._event_to_alert[event_key] = alert.alert_id
         if self._store is not None:
@@ -227,6 +236,30 @@ class AlertEngine:
             if state is not None:
                 alerts = [a for a in alerts if a.state == state]
             return sorted(alerts, key=lambda a: a.started_at)
+
+    def _explicit_replacement_alert_id(self, event: NormalizedEvent) -> str | None:
+        """Resolve an explicit source-event reference to an internal replacement alert.
+
+        Sources normally know their own event identifiers, not AlertSRV UUIDs. The
+        replacement reference therefore uses replacement_event_id plus an optional
+        replacement_source_id. Missing references are deliberately not guessed.
+        """
+        replacement_event_id = event.payload.get("replacement_event_id")
+        if not replacement_event_id:
+            return None
+        replacement_source_id = event.payload.get("replacement_source_id", event.source_id)
+        replacement_key = dedup_key(replacement_event_id, replacement_source_id)
+        replacement_alert_id = self._event_to_alert.get(replacement_key)
+        if replacement_alert_id is None and self._store is not None:
+            replacement_alert_id = self._store.event_alert_id(replacement_key)
+            if replacement_alert_id is not None:
+                self._event_to_alert[replacement_key] = replacement_alert_id
+        if replacement_alert_id is None:
+            return None
+        replacement = self._require(replacement_alert_id)
+        if replacement.state != AlertState.ACTIVE:
+            raise ValueError("replacement event must reference an active alert")
+        return replacement_alert_id
 
     @staticmethod
     def _resolution_state(event: NormalizedEvent, authority: str) -> AlertState | None:
