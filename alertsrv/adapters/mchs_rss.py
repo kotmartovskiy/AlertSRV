@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -10,7 +10,7 @@ import re
 
 from ..classification import classify_event
 from ..hazards import classify_hazard
-from ..models import NormalizedEvent, Severity
+from ..models import EventCategory, NormalizedEvent, Severity
 
 GENERAL_RSS_TEMPLATE = (
     "https://{code}.mchs.gov.ru/deyatelnost/press-centr/operativnaya-informaciya/rss"
@@ -118,4 +118,6 @@ class MchsRssAdapter:
                     "subtype": classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[1],
                 },
                 expires_at=_title_expiry(title, received_at.tzinfo),
+                category=EventCategory(classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[0]),
+                subtype=classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[1],
             )

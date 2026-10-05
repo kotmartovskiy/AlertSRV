@@ -7,7 +7,7 @@ import re
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
-from ..models import NormalizedEvent, Severity
+from ..models import EventCategory, NormalizedEvent, ResolutionType, Severity
 
 DEFAULT_REGISTRY_URL = "https://vet.ivanovoobl.ru/pravovye-akty/gosudarstvennyy-reestr-npa-sluzhby-vet/reestr-za-2026-god/"
 DEFAULT_SOURCE_ID = "ivanovo-veterinary-registry"
@@ -187,6 +187,9 @@ def parse_registry_html(html: str, *, registry_url: str, observed_at: datetime, 
                      "geography_precision": "region", "affected_areas": _affected_areas(title),
                      "resolved": cancelled},
             resolved=cancelled and bool(refs),
+            category=EventCategory.QUARANTINE,
+            subtype=subtype,
+            resolution_type=ResolutionType.CANCEL if cancelled and bool(refs) else None,
         ))
     return events
 

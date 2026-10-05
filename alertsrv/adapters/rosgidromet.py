@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from ..classification import classify_event
 from ..hazards import classify_hazard
-from ..models import NormalizedEvent, Severity
+from ..models import EventCategory, NormalizedEvent, Severity
 
 DEFAULT_EMERGENCY_URL = "https://www.meteorf.gov.ru/product/emergency/"
 DEFAULT_HYDROLOGY_INDEX_URL = "https://www.meteorf.gov.ru/press/polovod2026/"
@@ -92,6 +92,8 @@ class RosgidrometEmergencyAdapter:
                 payload={"url": self.url, "text": body, "scope": "russia",
                          "hazard_class": classify_hazard(body, event_type="weather.emergency_national"),
                          "category": category, "subtype": subtype},
+                category=EventCategory(category),
+                subtype=subtype,
             ))
         return events
 
@@ -303,6 +305,8 @@ class RosgidrometHydrologyAdapter:
                     "source_kind": "official_rosgidromet_hydrology",
                     "bulletin_published_at": published.isoformat(),
                 },
+                category=EventCategory.HYDROLOGY,
+                subtype=subtype,
             ))
         return events
 

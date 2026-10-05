@@ -269,7 +269,7 @@ class AlertEngine:
 
         resolution_type = event.resolution_type.value if event.resolution_type else event.payload.get("resolution_type")
         category = event.category.value if event.category else event.payload.get("category")
-        if category in {"air_threat", "emergency_mode", "public_safety"}:
+        if category in {"air_threat", "emergency_mode", "quarantine", "public_safety"}:
             if authority != "official_primary":
                 return None
             if resolution_type not in {item.value for item in ResolutionType}:
