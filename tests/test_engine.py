@@ -69,6 +69,24 @@ class AlertEngineTests(unittest.TestCase):
         self.assertEqual(alert.state, AlertState.ACTIVE)
         engine.ingest(event("4", "emergency-b", resolved=True, received_offset=3))
         self.assertEqual(alert.state, AlertState.RESOLVED)
+    def test_clear_then_new_warning_from_same_source_creates_new_alert(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "weather-a"))
+        engine.ingest(event("2", "weather-a", resolved=True, received_offset=5))
+        fresh = engine.ingest(event("3", "weather-a", received_offset=10))
+        self.assertEqual(alert.state, AlertState.RESOLVED)
+        self.assertIsNot(alert, fresh)
+        self.assertEqual(fresh.state, AlertState.ACTIVE)
+
+    def test_one_source_clear_followed_by_new_warning_keeps_aggregate_active(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "weather-a"))
+        engine.ingest(event("2", "emergency-b", received_offset=1))
+        engine.ingest(event("3", "weather-a", resolved=True, received_offset=2))
+        fresh = engine.ingest(event("4", "weather-a", received_offset=3))
+        self.assertIs(alert, fresh)
+        self.assertEqual(alert.state, AlertState.ACTIVE)
+
     def test_resolved_alert_does_not_reactivate_from_late_evidence(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a")); engine.resolve(alert.alert_id)
         late = engine.ingest(event("2", "weather-b", received_offset=30))
