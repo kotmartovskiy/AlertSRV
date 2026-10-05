@@ -100,8 +100,12 @@ class AlertEngine:
                     alert.expires_at = event.expires_at
 
         alert.evidence.append(evidence)
-        if event.resolved and alert.state == AlertState.ACTIVE:
-            self._transition(alert, AlertState.RESOLVED, event.received_at, "source resolved event")
+        if (
+            event.resolved
+            and alert.state == AlertState.ACTIVE
+            and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
+        ):
+            self._transition(alert, AlertState.RESOLVED, event.received_at, "all contributing sources resolved")
 
         self._event_to_alert[event_key] = alert.alert_id
         if self._store is not None:
@@ -179,6 +183,19 @@ class AlertEngine:
             if state is not None:
                 alerts = [a for a in alerts if a.state == state]
             return sorted(alerts, key=lambda a: a.started_at)
+
+    @staticmethod
+    def _all_sources_resolved(alert: Alert, *, resolved_event_id: str) -> bool:
+        """Resolve only after every contributing source has explicitly cleared."""
+        latest_by_source: dict[str, Evidence] = {}
+        for evidence in alert.evidence:
+            previous = latest_by_source.get(evidence.source_id)
+            if previous is None or evidence.received_at >= previous.received_at:
+                latest_by_source[evidence.source_id] = evidence
+        return bool(latest_by_source) and all(
+            evidence.event_id == resolved_event_id or evidence.payload.get("resolved") is True
+            for evidence in latest_by_source.values()
+        )
 
     def _find_correlated(self, event: NormalizedEvent) -> Alert | None:
         candidates = [

@@ -13,7 +13,7 @@ def event(event_id, source_id, *, correlation_key="region:ivanovo:weather:storm"
         title="Storm warning", severity=severity, confidence=confidence, occurred_at=received,
         received_at=received, correlation_key=correlation_key,
         expires_at=(received + timedelta(minutes=expires_offset) if expires_offset is not None else None),
-        resolved=resolved)
+        payload={"resolved": resolved}, resolved=resolved)
 class AlertEngineTests(unittest.TestCase):
     def test_first_event_becomes_active_and_records_transition(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a"))
@@ -60,6 +60,15 @@ class AlertEngineTests(unittest.TestCase):
         engine.ingest(event("2", "weather-a", resolved=True, received_offset=5))
         self.assertEqual(alert.state, AlertState.RESOLVED)
         self.assertEqual(alert.transition_history[-1][:2], (AlertState.ACTIVE, AlertState.RESOLVED))
+
+    def test_one_source_clear_does_not_resolve_multi_source_alert(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "weather-a", confidence=0.7))
+        engine.ingest(event("2", "emergency-b", confidence=0.9, received_offset=1))
+        engine.ingest(event("3", "weather-a", resolved=True, received_offset=2))
+        self.assertEqual(alert.state, AlertState.ACTIVE)
+        engine.ingest(event("4", "emergency-b", resolved=True, received_offset=3))
+        self.assertEqual(alert.state, AlertState.RESOLVED)
     def test_resolved_alert_does_not_reactivate_from_late_evidence(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a")); engine.resolve(alert.alert_id)
         late = engine.ingest(event("2", "weather-b", received_offset=30))
