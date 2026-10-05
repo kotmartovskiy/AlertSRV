@@ -88,6 +88,36 @@ class UITests(unittest.TestCase):
         self.assertIn("Ивановская область", body)
         self.assertIn("/ui/sources/37/mchs-ivanovo", body)
 
+    def test_ui_sources_distinguishes_empty_and_unavailable(self):
+        class FakeScheduler:
+            regions = ()
+            def enabled_sources(self):
+                return (
+                    ScheduledSource("37", "empty-source", 60),
+                    ScheduledSource("37", "down-source", 120),
+                )
+            def last_results(self):
+                return {
+                    ("37", "empty-source"): PollResult(
+                        "empty-source", SourceHealth.HEALTHY, PollStatus.EMPTY, ()
+                    ),
+                    ("37", "down-source"): PollResult(
+                        "down-source", SourceHealth.UNAVAILABLE, PollStatus.UNAVAILABLE, (),
+                        "ConnectionError: offline",
+                    ),
+                }
+            def history(self, region_code, source_id, limit=None):
+                return ()
+
+        self.service.engine.set_source_health("empty-source", SourceHealth.HEALTHY)
+        self.service.engine.set_source_health("down-source", SourceHealth.UNAVAILABLE)
+        self.service.attach_scheduler(FakeScheduler())
+        status, body = self.get("/ui/sources")
+        self.assertEqual(status, 200)
+        self.assertIn("Пусто", body)
+        self.assertIn("Недоступны", body)
+        self.assertIn("ConnectionError: offline", body)
+
     def test_ui_source_detail_renders_history(self):
         class FakeScheduler:
             regions = ()

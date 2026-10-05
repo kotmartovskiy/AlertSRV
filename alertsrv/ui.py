@@ -354,6 +354,12 @@ def render_sources_page(service: AlertService, scheduler) -> str:
     cards = "".join(rows) or '<div class="empty"><h2>Источники не настроены</h2><p>Для выбранных регионов нет зарегистрированных источников.</p></div>'
     healthy = sum(1 for spec in configured if getattr(health.get(spec.source_id), "value", "") == "healthy")
     problems = len(configured) - healthy
+    status_counts = {status: 0 for status in ("success", "empty", "stale", "degraded", "unavailable", "not_polled")}
+    for spec in configured:
+        result = results.get((spec.region_code, spec.source_id))
+        status = result.status.value if result else "not_polled"
+        status_counts[status] += 1
+    polled = len(configured) - status_counts["not_polled"]
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AlertSRV — источники</title>
@@ -375,7 +381,7 @@ def render_sources_page(service: AlertService, scheduler) -> str:
 </style></head><body><main>
 <a class="back" href="/ui">← Обстановка</a>
 <header class="header"><div><h1>Источники</h1><p class="lead">Состояние реальных региональных модулей и последних опросов.</p></div>
-<div class="summary"><span>Всего: <strong>{len(configured)}</strong></span><span>Здоровы: <strong>{healthy}</strong></span><span>Проблемы: <strong>{problems}</strong></span></div></header>
+<div class="summary"><span>Всего: <strong>{len(configured)}</strong></span><span>Опросов: <strong>{polled}</strong></span><span>Успешно: <strong>{status_counts['success']}</strong></span><span>Пусто: <strong>{status_counts['empty']}</strong></span><span>Проблемы: <strong>{problems}</strong></span><span>Недоступны: <strong>{status_counts['unavailable']}</strong></span></div></header>
 <section class="source-list">{cards}</section>
 </main></body></html>"""
 
