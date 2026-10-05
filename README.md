@@ -46,6 +46,12 @@ AlertEngine
 
 The HTTP API is an input/output boundary around the service. It does not contain aggregation policy.
 
+### Regional modules
+
+External source polling is organized by independently selectable regional modules. A regional module contains only the source definitions relevant to that region, including polling intervals, category coverage, and lazy adapter factories. Importing a module does not perform network requests; adapters are instantiated only when that region is enabled.
+
+This keeps a local deployment from polling unrelated regions and gives small ARM devices a bounded workload. The core aggregation engine remains shared across all regions, while region-specific URLs, parsers, authority rules, and source schedules stay outside the core. Ivanovo (`37`) is the first reference module.
+
 ## Current implementation
 
 The current vertical slice includes:

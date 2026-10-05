@@ -41,7 +41,8 @@ Completed:
 
 Current verified state:
 
-- 161 automated tests pass;
+- 165 automated tests pass;
+- regional modules are introduced as lazy, independently selectable source bundles; Ivanovo (`37`) is the first module;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
 - Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;
