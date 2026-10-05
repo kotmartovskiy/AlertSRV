@@ -11,6 +11,7 @@ import re
 from ..classification import classify_event
 from ..hazards import classify_hazard
 from ..models import EventCategory, NormalizedEvent, Severity
+from ..poller import SourceFetchResult
 
 GENERAL_RSS_TEMPLATE = (
     "https://{code}.mchs.gov.ru/deyatelnost/press-centr/operativnaya-informaciya/rss"
@@ -67,15 +68,19 @@ class MchsRssAdapter:
         self.source_id = source_id
         self.general_fallback_url = general_fallback_url
 
-    def fetch(self) -> list[NormalizedEvent]:
+    def fetch(self) -> SourceFetchResult:
         try:
             root = self._fetch_root(self.rss_url)
-            return list(self._parse(root))
+            return SourceFetchResult(events=tuple(self._parse(root)))
         except HTTPError as exc:
             if exc.code != 404 or not self.general_fallback_url:
                 raise
             root = self._fetch_root(self.general_fallback_url)
-            return list(self._parse(root, warnings_only=True))
+            return SourceFetchResult(
+                events=tuple(self._parse(root, warnings_only=True)),
+                parser_degraded=True,
+                detail="regional RSS endpoint returned 404; general feed fallback used",
+            )
 
     def _fetch_root(self, url: str) -> ElementTree.Element:
         request = Request(url, headers={"User-Agent": "AlertSRV/0.1"})
