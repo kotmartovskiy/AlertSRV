@@ -9,9 +9,10 @@ from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
 from ..models import NormalizedEvent, Severity
+from ..source_catalog import IVANOVO
 
-DEFAULT_SITEMAP_URL = "https://ivanovoobl.ru/sitemap.xml"
-DEFAULT_SOURCE_ID = "ivanovo-operational-hq"
+DEFAULT_SITEMAP_URL = IVANOVO.operational_sitemap_url
+DEFAULT_SOURCE_ID = IVANOVO.source_id
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
 _DESCRIPTION_RE = re.compile(
