@@ -36,11 +36,12 @@ Completed:
 - explicit source-authority mapping is attached by the current MChS, Rosgidromet emergency, hydrology, operational-headquarters and veterinary adapters;
 - structured affected-area hierarchy is implemented and used conservatively for correlation;
 - notification delivery state and an adapter contract/dispatcher are implemented; delivery failure is isolated from alert lifecycle;
-- local JSONL notification adapter is implemented as the first deterministic transport.
+- local JSONL notification adapter is implemented as the first deterministic transport;
+- local web UI is implemented for active warnings with region and municipality filters.
 
 Current verified state:
 
-- 134 automated tests pass;
+- 136 automated tests pass;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
 - Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;
@@ -70,12 +71,11 @@ The semantic taxonomy is documented in docs/PUBLIC_SAFETY_TAXONOMY.md.
 
 ## Next work
 
-1. Add concrete notification adapters (starting with a local/test-safe transport, then external channels only with deterministic tests).
-2. Add a small local UI showing active warnings by selected region and municipality.
-3. Add operational retention, backup/repair and schema migration procedures.
-4. Add broader national source coverage only after each source family has deterministic tests.
-5. Add source-specific freshness/degradation metadata where an adapter can distinguish:
+1. Add operational retention, backup/repair and schema migration procedures.
+2. Add broader national source coverage only after each source family has deterministic tests.
+3. Add source-specific freshness/degradation metadata where an adapter can distinguish:
    successful empty result, stale upstream data, parser degradation, and transport failure.
+4. Add concrete external notification adapters only with deterministic tests and isolated delivery failures.
 
 ## Safety-critical source policy
 

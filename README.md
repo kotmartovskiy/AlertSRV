@@ -67,6 +67,7 @@ The current vertical slice includes:
 - structured affected-area hierarchy;
 - notification delivery state with independent per-channel failure handling;
 - local JSONL file notification adapter;
+- local web UI for active warnings with region and municipality filters;
 - automated tests.
 
 External notification channels are intentionally not connected yet. The file adapter provides a local, deterministic transport for integration and diagnostics without introducing network credentials or external side effects.
@@ -130,6 +131,7 @@ Current endpoints:
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/health` | Service health check |
+| GET | `/ui` | Local active-warning UI; optional `region` and `municipality` filters |
 | GET | `/api/v1/alerts` | List alerts |
 | GET | `/api/v1/alerts/<id>` | Get one alert |
 | POST | `/api/v1/events` | Ingest a normalized event |
