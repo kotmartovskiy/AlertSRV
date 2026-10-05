@@ -56,6 +56,20 @@ class CorrelationTests(unittest.TestCase):
         second = engine.ingest(event("2", "ros-national", scope="russia", minutes=30))
         self.assertIsNot(first, second)
 
+    def test_same_source_does_not_cross_correlate_without_exact_key(self):
+        engine = AlertEngine()
+        first = engine.ingest(event("1", "mchs-37"))
+        second = engine.ingest(event("2", "mchs-37", minutes=30))
+        self.assertIsNot(first, second)
+
+    def test_missing_category_does_not_cross_correlate(self):
+        engine = AlertEngine()
+        first = engine.ingest(event("1", "mchs-37", category="weather"))
+        second = event("2", "ros-37", minutes=30)
+        second.payload.pop("category")
+        second.payload.pop("subtype")
+        self.assertIsNot(first, engine.ingest(second))
+
     def test_correlation_time_window_is_conservative(self):
         engine = AlertEngine()
         first = engine.ingest(event("1", "mchs-37"))

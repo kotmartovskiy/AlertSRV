@@ -231,9 +231,9 @@ class AlertEngine:
                 hazard = payload.get("hazard_class") or classify_hazard(evidence.title)
                 category = payload.get("category")
                 subtype = payload.get("subtype")
-                if event_category and category and category != event_category:
+                if event_category != category:
                     continue
-                if event_subtype and subtype and subtype != event_subtype:
+                if event_subtype != subtype:
                     continue
                 if hazard != event_hazard:
                     continue
