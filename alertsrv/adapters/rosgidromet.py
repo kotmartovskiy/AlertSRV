@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from ..classification import classify_event
 from ..hazards import classify_hazard
 from ..models import EventCategory, NormalizedEvent, Severity
+from ..poller import SourceFetchResult
 
 DEFAULT_EMERGENCY_URL = "https://www.meteorf.gov.ru/product/emergency/"
 DEFAULT_HYDROLOGY_INDEX_URL = "https://www.meteorf.gov.ru/press/polovod2026/"
@@ -66,7 +67,7 @@ class RosgidrometEmergencyAdapter:
     def __init__(self, url: str = DEFAULT_EMERGENCY_URL, timeout: float = 15.0, source_id: str = "rosgidromet-emergency") -> None:
         self.url, self.timeout, self.source_id = url, timeout, source_id
 
-    def fetch(self) -> list[NormalizedEvent]:
+    def fetch(self) -> SourceFetchResult:
         request = Request(self.url, headers={"User-Agent": "AlertSRV/0.1"})
         with urlopen(request, timeout=self.timeout) as response:
             parser = _EmergencyParser()
@@ -96,7 +97,7 @@ class RosgidrometEmergencyAdapter:
                 category=EventCategory(category),
                 subtype=subtype,
             ))
-        return events
+        return SourceFetchResult(events=tuple(events))
 
     @staticmethod
     def _parse_date(value: str) -> datetime | None:
@@ -251,16 +252,21 @@ class RosgidrometHydrologyAdapter:
         candidates = [item for item in parser.items if item.published_at <= now.astimezone(_MOSCOW)]
         return max(candidates, key=lambda item: item.published_at, default=None)
 
-    def fetch(self) -> list[NormalizedEvent]:
+    def fetch(self) -> SourceFetchResult:
         received_at = datetime.now(timezone.utc)
         index_html = self._fetch(self.url).decode("utf-8", "replace")
         bulletin = self.discover_latest(index_html, now=received_at, base_url=self.url)
         if bulletin is None:
-            return []
+            return SourceFetchResult(events=(), detail="no current hydrology bulletin found")
         if bulletin.published_at < received_at.astimezone(_MOSCOW) - self.max_bulletin_age:
-            return []
+            age = received_at.astimezone(_MOSCOW) - bulletin.published_at
+            return SourceFetchResult(
+                stale=True,
+                detail=f"latest hydrology bulletin is {age.days}d old",
+            )
         html = self._fetch(bulletin.url).decode("utf-8", "replace")
-        return self.parse(html, url=bulletin.url, received_at=received_at)
+        events = self.parse(html, url=bulletin.url, received_at=received_at)
+        return SourceFetchResult(events=tuple(events))
 
     def parse(self, html: str, *, url: str, received_at: datetime) -> list[NormalizedEvent]:
         published = self._parse_published_at(html)

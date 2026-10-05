@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 from ..models import EventCategory, NormalizedEvent, ResolutionType, Severity
+from ..poller import SourceFetchResult
 
 DEFAULT_REGISTRY_URL = "https://vet.ivanovoobl.ru/pravovye-akty/gosudarstvennyy-reestr-npa-sluzhby-vet/reestr-za-2026-god/"
 DEFAULT_SOURCE_ID = "ivanovo-veterinary-registry"
@@ -203,6 +204,7 @@ class IvanovoVeterinaryRegistryAdapter:
         with urlopen(Request(url, headers={"User-Agent": "AlertSRV/0.1"}), timeout=self.timeout) as response:
             return response.read()
 
-    def fetch(self):
+    def fetch(self) -> SourceFetchResult:
         html = self._fetch(self.registry_url).decode("utf-8", errors="replace")
-        return parse_registry_html(html, registry_url=self.registry_url, observed_at=datetime.now(timezone.utc), source_id=self.source_id)
+        events = parse_registry_html(html, registry_url=self.registry_url, observed_at=datetime.now(timezone.utc), source_id=self.source_id)
+        return SourceFetchResult(events=tuple(events))

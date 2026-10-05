@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
 from ..models import EventCategory, NormalizedEvent, ResolutionType, Severity
+from ..poller import SourceFetchResult
 from ..source_catalog import IVANOVO
 
 DEFAULT_SITEMAP_URL = IVANOVO.operational_sitemap_url
@@ -198,7 +199,7 @@ class IvanovoOperationalHQAdapter:
         rows.sort(key=lambda row: row[1], reverse=True)
         return rows[: self.max_candidates]
 
-    def fetch(self) -> list[NormalizedEvent]:
+    def fetch(self) -> SourceFetchResult:
         events: list[NormalizedEvent] = []
         for url, lastmod in self._sitemap_urls():
             html = self._fetch(url).decode("utf-8", errors="replace")
@@ -214,4 +215,4 @@ class IvanovoOperationalHQAdapter:
                     source_id=self.source_id,
                 )
             )
-        return events
+        return SourceFetchResult(events=tuple(events))

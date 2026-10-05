@@ -76,6 +76,39 @@ def test_hydrology_ignores_old_bulletin():
 
 
 
+def test_hydrology_fetch_marks_old_latest_bulletin_stale():
+    index_html = """
+    <a href="/old">Опасные и неблагоприятные явления на реках, озерах и водохранилищах Российской Федерации по состоянию на 15 июля 2026 г.</a>
+    """
+    adapter = RosgidrometHydrologyAdapter(max_bulletin_age=timedelta(days=1))
+    adapter._fetch = lambda url: index_html.encode("utf-8")
+
+    result = adapter.fetch()
+
+    assert result.events == ()
+    assert result.stale is True
+    assert "old" in result.detail
+
+
+def test_hydrology_fetch_wraps_current_events():
+    index_html = """
+    <a href="/current">Опасные и неблагоприятные явления на реках, озерах и водохранилищах Российской Федерации по состоянию на 5 октября 2026 г.</a>
+    """
+    bulletin_html = """
+    <div>5 октября 2026 г</div>
+    <table><tr><td>Ивановская область</td><td>Уводь</td><td>Иваново</td>
+    <td>превышена отметка ОЯ</td><td>сохранится</td></tr></table>
+    """
+    adapter = RosgidrometHydrologyAdapter(max_bulletin_age=timedelta(days=7))
+    adapter._fetch = lambda url: (index_html if url == adapter.url else bulletin_html).encode("utf-8")
+
+    result = adapter.fetch()
+
+    assert result.stale is False
+    assert len(result.events) == 1
+    assert result.events[0].source_id == adapter.source_id
+
+
 def test_hydrology_discovery_selects_latest_matching_bulletin():
     html = """
     <div>2 октября 2026</div>
