@@ -110,12 +110,19 @@ class AlertEngine:
                     alert.expires_at = event.expires_at
 
         alert.evidence.append(evidence)
+        resolution_state = self._resolution_state(event, authority.authority.value)
         if (
-            self._can_resolve_event(event, authority.authority.value)
+            resolution_state is not None
             and alert.state == AlertState.ACTIVE
             and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
         ):
-            self._transition(alert, AlertState.RESOLVED, event.received_at, "all contributing sources resolved")
+            resolution_type = event.payload.get("resolution_type", "resolved")
+            self._transition(
+                alert,
+                resolution_state,
+                event.received_at,
+                f"all contributing sources {resolution_type}",
+            )
 
         self._event_to_alert[event_key] = alert.alert_id
         if self._store is not None:
@@ -195,17 +202,30 @@ class AlertEngine:
             return sorted(alerts, key=lambda a: a.started_at)
 
     @staticmethod
-    def _can_resolve_event(event: NormalizedEvent, authority: str) -> bool:
-        """Require explicit authoritative clearance for safety-critical alerts."""
+    def _resolution_state(event: NormalizedEvent, authority: str) -> AlertState | None:
+        """Map an explicit clearance semantic to its terminal alert state."""
         if not event.resolved:
-            return False
+            return None
+
+        resolution_type = event.payload.get("resolution_type")
         category = event.payload.get("category")
         if category in {"air_threat", "emergency_mode", "public_safety"}:
-            return (
-                authority == "official_primary"
-                and event.payload.get("resolution_type") in {"all_clear", "cancel"}
-            )
-        return True
+            if authority != "official_primary":
+                return None
+            if resolution_type not in {"all_clear", "cancel", "superseded"}:
+                return None
+
+        if resolution_type == "all_clear":
+            return AlertState.RESOLVED
+        if resolution_type == "cancel":
+            return AlertState.CANCELLED
+        if resolution_type == "superseded":
+            return AlertState.SUPERSEDED
+
+        # Preserve the legacy contract for ordinary non-safety events.
+        if resolution_type is None:
+            return AlertState.RESOLVED
+        return None
 
     @staticmethod
     def _all_sources_resolved(alert: Alert, *, resolved_event_id: str) -> bool:

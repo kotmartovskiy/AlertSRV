@@ -91,6 +91,44 @@ class AlertEngineTests(unittest.TestCase):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a")); engine.resolve(alert.alert_id)
         late = engine.ingest(event("2", "weather-b", received_offset=30))
         self.assertIsNot(alert, late); self.assertEqual(alert.state, AlertState.RESOLVED)
+
+    def test_authoritative_cancel_maps_to_cancelled(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "official-hq"))
+        cleared = event("2", "official-hq", resolved=True, received_offset=5)
+        cleared.payload.update({
+            "category": "public_safety",
+            "source_kind": "official_mchs",
+            "resolution_type": "cancel",
+        })
+        engine.ingest(cleared)
+        self.assertEqual(alert.state, AlertState.CANCELLED)
+        self.assertEqual(alert.transition_history[-1][:2], (AlertState.ACTIVE, AlertState.CANCELLED))
+
+    def test_authoritative_superseded_maps_to_superseded(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "official-hq"))
+        replaced = event("2", "official-hq", resolved=True, received_offset=5)
+        replaced.payload.update({
+            "category": "public_safety",
+            "source_kind": "official_mchs",
+            "resolution_type": "superseded",
+        })
+        engine.ingest(replaced)
+        self.assertEqual(alert.state, AlertState.SUPERSEDED)
+
+    def test_weak_source_cannot_cancel_safety_alert(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("1", "official-hq"))
+        cleared = event("2", "unofficial", resolved=True, received_offset=5)
+        cleared.payload.update({
+            "category": "public_safety",
+            "source_kind": "unknown",
+            "resolution_type": "cancel",
+        })
+        engine.ingest(cleared)
+        self.assertEqual(alert.state, AlertState.ACTIVE)
+
     def test_older_event_cannot_move_updated_at_backwards(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a", received_offset=10))
         engine.ingest(event("2", "weather-b", received_offset=5))
