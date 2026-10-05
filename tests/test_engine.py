@@ -306,5 +306,50 @@ class AlertEngineTests(unittest.TestCase):
                 resolution_type=ResolutionType.SUPERSEDED,
             )
 
+    def test_conflicting_official_clear_does_not_resolve_active_alert(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("warning", "official-a", received_offset=0))
+        clear = event("clear", "official-b", resolved=True, received_offset=5)
+        clear.payload.update({
+            "category": "public_safety",
+            "source_kind": "official_mchs",
+            "resolution_type": "all_clear",
+        })
+        engine.ingest(clear)
+        self.assertEqual(alert.state, AlertState.ACTIVE)
+
+    def test_each_contributing_source_must_clear_before_resolution(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("warning-a", "official-a"))
+        engine.ingest(event("warning-b", "official-b", received_offset=1))
+        engine.ingest(event("clear-a", "official-a", resolved=True, received_offset=2))
+        self.assertEqual(alert.state, AlertState.ACTIVE)
+        engine.ingest(event("clear-b", "official-b", resolved=True, received_offset=3))
+        self.assertEqual(alert.state, AlertState.RESOLVED)
+
+    def test_typed_resolution_metadata_controls_transition_reason(self):
+        engine = AlertEngine()
+        alert = engine.ingest(event("warning", "official-a"))
+        clear = event("clear", "official-a", resolved=True, received_offset=5)
+        clear.payload["resolution_type"] = "cancel"
+        typed = NormalizedEvent(
+            event_id=clear.event_id,
+            source_id=clear.source_id,
+            event_type=clear.event_type,
+            title=clear.title,
+            severity=clear.severity,
+            confidence=clear.confidence,
+            occurred_at=clear.occurred_at,
+            received_at=clear.received_at,
+            correlation_key=clear.correlation_key,
+            payload=clear.payload,
+            resolved=True,
+            category=EventCategory.WEATHER,
+            resolution_type=ResolutionType.ALL_CLEAR,
+        )
+        engine.ingest(typed)
+        self.assertEqual(alert.state, AlertState.RESOLVED)
+        self.assertIn("all_clear", alert.transition_history[-1][3])
+
 if __name__ == "__main__":
     unittest.main()

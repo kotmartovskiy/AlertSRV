@@ -116,9 +116,9 @@ class AlertEngine:
             and alert.state == AlertState.ACTIVE
             and self._all_sources_resolved(alert, resolved_event_id=event.event_id)
         ):
-            resolution_type = event.payload.get("resolution_type", "resolved")
+            resolution_type = event.resolution_type.value if event.resolution_type else event.payload.get("resolution_type", "resolved")
             replacement_alert_id = self._explicit_replacement_alert_id(event)
-            has_explicit_replacement = bool(event.payload.get("replacement_event_id"))
+            has_explicit_replacement = bool(event.replacement_event_id or event.payload.get("replacement_event_id"))
             if resolution_state == AlertState.SUPERSEDED and replacement_alert_id is not None:
                 self._supersede_locked(
                     alert.alert_id,
