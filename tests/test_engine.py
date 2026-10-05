@@ -153,6 +153,25 @@ class AlertEngineTests(unittest.TestCase):
             AlertEngine._transition(alert, terminal, T0, "valid terminal transition")
             self.assertEqual(alert.state, terminal)
 
+    def test_supersede_links_old_and_replacement_alerts(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "weather-a", correlation_key="old"))
+        replacement = engine.ingest(event("replacement", "weather-a", correlation_key="replacement"))
+        result = engine.supersede(old.alert_id, replacement.alert_id, reason="official replacement")
+        self.assertIs(result, old)
+        self.assertEqual(old.state, AlertState.SUPERSEDED)
+        self.assertEqual(old.superseded_by, replacement.alert_id)
+        self.assertEqual(replacement.supersedes_alert_id, old.alert_id)
+        self.assertEqual(old.transition_history[-1][3], "official replacement")
+
+    def test_supersede_rejects_non_active_replacement(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "weather-a", correlation_key="old"))
+        replacement = engine.ingest(event("replacement", "weather-a", correlation_key="replacement"))
+        engine.resolve(replacement.alert_id)
+        with self.assertRaises(ValueError):
+            engine.supersede(old.alert_id, replacement.alert_id)
+
     def test_older_event_cannot_move_updated_at_backwards(self):
         engine = AlertEngine(); alert = engine.ingest(event("1", "weather-a", received_offset=10))
         engine.ingest(event("2", "weather-b", received_offset=5))

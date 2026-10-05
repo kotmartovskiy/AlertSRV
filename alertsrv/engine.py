@@ -138,6 +138,33 @@ class AlertEngine:
                     self._store.save_alert(alert)
             return alert
 
+    def supersede(self, alert_id: str, replacement_alert_id: str, *, reason: str = "superseded by replacement alert") -> Alert:
+        """Link an active alert to its active replacement and close the old alert."""
+        with self._lock:
+            return self._supersede_locked(alert_id, replacement_alert_id, reason=reason)
+
+    def _supersede_locked(self, alert_id: str, replacement_alert_id: str, *, reason: str) -> Alert:
+        if alert_id == replacement_alert_id:
+            raise ValueError("an alert cannot supersede itself")
+        alert = self._require(alert_id)
+        replacement = self._require(replacement_alert_id)
+        if alert.state != AlertState.ACTIVE:
+            raise ValueError("only an active alert can be superseded")
+        if replacement.state != AlertState.ACTIVE:
+            raise ValueError("replacement alert must be active")
+        if alert.superseded_by is not None:
+            raise ValueError("alert is already linked to a replacement")
+        if replacement.supersedes_alert_id is not None:
+            raise ValueError("replacement alert is already linked to a superseded alert")
+
+        alert.superseded_by = replacement.alert_id
+        replacement.supersedes_alert_id = alert.alert_id
+        self._transition(alert, AlertState.SUPERSEDED, self._clock(), reason)
+        if self._store is not None:
+            self._store.save_alert(alert)
+            self._store.save_alert(replacement)
+        return alert
+
     def expire(self, *, now: datetime | None = None) -> list[Alert]:
         with self._lock:
             now = now or self._clock()

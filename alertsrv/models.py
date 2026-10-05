@@ -78,5 +78,7 @@ class Alert:
     expires_at: datetime | None = None
     source_authority: str = "unknown"
     source_authority_score: float = 0.0
+    superseded_by: str | None = None
+    supersedes_alert_id: str | None = None
     evidence: list[Evidence] = field(default_factory=list)
     transition_history: list[tuple[AlertState, AlertState, datetime, str]] = field(default_factory=list)

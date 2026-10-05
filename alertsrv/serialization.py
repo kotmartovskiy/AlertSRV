@@ -28,6 +28,8 @@ def alert_to_dict(alert: Alert) -> dict[str, Any]:
         "expires_at": datetime_to_json(alert.expires_at) if alert.expires_at else None,
         "source_authority": alert.source_authority,
         "source_authority_score": alert.source_authority_score,
+        "superseded_by": alert.superseded_by,
+        "supersedes_alert_id": alert.supersedes_alert_id,
         "evidence": [
             {
                 "event_id": item.event_id,
@@ -92,6 +94,8 @@ def alert_from_dict(data: dict[str, Any]) -> Alert:
         expires_at=(datetime_from_json(data["expires_at"]) if data.get("expires_at") else None),
         source_authority=data.get("source_authority", "unknown"),
         source_authority_score=float(data.get("source_authority_score", 0.0)),
+        superseded_by=data.get("superseded_by"),
+        supersedes_alert_id=data.get("supersedes_alert_id"),
         evidence=evidence,
         transition_history=transitions,
     )

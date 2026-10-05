@@ -18,6 +18,15 @@ class SerializationTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(alert_to_dict(alert)["state"], "active")
 
+    def test_supersession_links_survive_serialization(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "weather-a", correlation_key="old"))
+        replacement = engine.ingest(event("replacement", "weather-a", correlation_key="replacement"))
+        engine.supersede(old.alert_id, replacement.alert_id)
+        data = alert_to_dict(old)
+        self.assertEqual(data["superseded_by"], replacement.alert_id)
+        self.assertIsNone(data["supersedes_alert_id"])
+
 
 class SQLitePersistenceTests(unittest.TestCase):
     def test_alert_and_dedup_index_survive_restart(self):
