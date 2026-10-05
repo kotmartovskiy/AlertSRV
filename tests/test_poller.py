@@ -1,8 +1,9 @@
 import unittest
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from alertsrv.engine import AlertEngine
+from alertsrv.freshness import FreshnessPolicy
 from alertsrv.models import AlertState, NormalizedEvent, Severity, SourceHealth
 from alertsrv.poller import SourcePoller
 
@@ -86,6 +87,18 @@ class SourcePollerTests(unittest.TestCase):
         self.assertEqual(result.health, SourceHealth.DEGRADED)
         self.assertIn("ValueError", result.error or "")
         self.assertEqual(engine.source_health("source-a"), SourceHealth.DEGRADED)
+
+    def test_invalid_event_does_not_partially_apply_poll_batch(self):
+        engine = AlertEngine(clock=lambda: T0, freshness=FreshnessPolicy(max_age=timedelta(minutes=30)))
+        valid = make_event("valid", "source-a")
+        stale = NormalizedEvent(
+            event_id="stale", source_id="source-a", event_type="test.warning", title="Stale warning",
+            severity=Severity.WARNING, confidence=0.9, occurred_at=T0, received_at=T0.replace(hour=5),
+            correlation_key="test:stale",
+        )
+        result = SourcePoller(engine).poll(FakeSource("source-a", [valid, stale]))
+        self.assertEqual(result.health, SourceHealth.DEGRADED)
+        self.assertEqual(engine.list_alerts(), [])
 
     def test_poll_many_isolated(self):
         engine = AlertEngine()

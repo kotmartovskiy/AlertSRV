@@ -42,6 +42,24 @@ class AlertEngine:
         with self._lock:
             return self._ingest_locked(event)
 
+    def ingest_batch(self, events: list[NormalizedEvent] | tuple[NormalizedEvent, ...]) -> list[Alert]:
+        """Validate a poll batch before applying any of its events.
+
+        This keeps adapter mistakes (wrong source identity, stale data, future
+        timestamps) from partially changing alert state. It intentionally does
+        not roll back unexpected internal/storage failures after validation.
+        """
+        events = tuple(events)
+        with self._lock:
+            now = self._clock()
+            for event in events:
+                freshness = self._freshness.classify(event, now=now)
+                if freshness == Freshness.FUTURE:
+                    raise ValueError("event received_at is too far in the future")
+                if freshness == Freshness.STALE:
+                    raise ValueError("event received_at is too old")
+            return [self._ingest_locked(event) for event in events]
+
     def _ingest_locked(self, event: NormalizedEvent) -> Alert:
         event_key = dedup_key(event.event_id, event.source_id)
         existing_id = self._event_to_alert.get(event_key)

@@ -6,7 +6,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .models import NormalizedEvent, Severity
+from .models import EventCategory, NormalizedEvent, ResolutionType, Severity
 from .serialization import alert_to_dict
 from .service import AlertService
 
@@ -35,11 +35,22 @@ def _parse_event(data: dict) -> NormalizedEvent:
         raise ValueError(f"invalid datetime or confidence: {exc}") from exc
     if occurred_at.tzinfo is None or received_at.tzinfo is None or (expires_at is not None and expires_at.tzinfo is None):
         raise ValueError("datetimes must include timezone information")
+    try:
+        category = EventCategory(data["category"]) if data.get("category") is not None else None
+        resolution_type = ResolutionType(data["resolution_type"]) if data.get("resolution_type") is not None else None
+    except ValueError as exc:
+        raise ValueError(f"invalid typed event metadata: {exc}") from exc
     return NormalizedEvent(
         event_id=data["event_id"], source_id=data["source_id"], event_type=data["event_type"],
         title=data.get("title", ""), severity=Severity(data["severity"]), confidence=float(confidence),
         occurred_at=occurred_at, received_at=received_at, correlation_key=data["correlation_key"],
         payload=data.get("payload", {}), expires_at=expires_at, resolved=data.get("resolved", False),
+        category=category, subtype=data.get("subtype"),
+        resolution_type=resolution_type,
+        replacement_event_id=data.get("replacement_event_id"),
+        replacement_source_id=data.get("replacement_source_id"),
+        source_authority=data.get("source_authority", "unknown"),
+        source_authority_score=float(data.get("source_authority_score", 0.0)),
     )
 
 

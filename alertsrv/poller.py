@@ -55,7 +55,7 @@ class SourcePoller:
                     raise ValueError(
                         f"source {source_id!r} returned event for {event.source_id!r}"
                     )
-                self.engine.ingest(event)
+            self.engine.ingest_batch(events)
         except Exception as exc:
             # Fetch succeeded, but the source response could not be trusted or
             # ingested. Keep this distinct from transport unavailability.
