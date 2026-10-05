@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
-from ..models import NormalizedEvent, Severity
+from ..models import EventCategory, NormalizedEvent, Severity
 from ..source_catalog import IVANOVO
 
 DEFAULT_SITEMAP_URL = IVANOVO.operational_sitemap_url
@@ -135,6 +135,8 @@ def parse_operational_page(
                     "source_kind": "official_regional_operational_hq",
                 },
                 resolved=resolved,
+                category=EventCategory.AIR_THREAT,
+                subtype=subtype,
             )
         )
 

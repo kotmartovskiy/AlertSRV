@@ -2,7 +2,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from alertsrv.engine import AlertEngine
-from alertsrv.models import AlertState, NormalizedEvent, Severity, SourceHealth
+from alertsrv.models import AlertState, EventCategory, NormalizedEvent, ResolutionType, Severity, SourceHealth
 UTC = timezone.utc
 T0 = datetime(2026, 10, 4, 12, 0, tzinfo=UTC)
 def event(event_id, source_id, *, correlation_key="region:ivanovo:weather:storm",
@@ -171,6 +171,32 @@ class AlertEngineTests(unittest.TestCase):
         engine.resolve(replacement.alert_id)
         with self.assertRaises(ValueError):
             engine.supersede(old.alert_id, replacement.alert_id)
+
+    def test_typed_resolution_and_replacement_metadata_are_preferred(self):
+        engine = AlertEngine()
+        old = engine.ingest(event("old", "official-hq", correlation_key="old"))
+        replacement = engine.ingest(event("replacement", "official-hq", correlation_key="replacement"))
+        cleared = event("clear-old", "official-hq", correlation_key="old", resolved=True, received_offset=5)
+        typed = NormalizedEvent(
+            event_id=cleared.event_id,
+            source_id=cleared.source_id,
+            event_type=cleared.event_type,
+            title=cleared.title,
+            severity=cleared.severity,
+            confidence=cleared.confidence,
+            occurred_at=cleared.occurred_at,
+            received_at=cleared.received_at,
+            correlation_key=cleared.correlation_key,
+            payload={"category": "weather", "resolution_type": "cancel", "replacement_event_id": "missing"},
+            resolved=True,
+            category=EventCategory.PUBLIC_SAFETY,
+            resolution_type=ResolutionType.SUPERSEDED,
+            replacement_event_id="replacement",
+        )
+        typed.payload.update({"source_kind": "official_mchs", "category": "weather", "resolution_type": "cancel"})
+        engine.ingest(typed)
+        self.assertEqual(old.state, AlertState.SUPERSEDED)
+        self.assertEqual(old.superseded_by, replacement.alert_id)
 
     def test_explicit_supersession_event_links_to_replacement_by_source_event(self):
         engine = AlertEngine()

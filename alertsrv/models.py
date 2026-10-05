@@ -20,6 +20,24 @@ class AlertState(str, Enum):
     CANCELLED = "cancelled"
     SUPERSEDED = "superseded"
 
+class EventCategory(str, Enum):
+    WEATHER = "weather"
+    HYDROLOGY = "hydrology"
+    AIR_THREAT = "air_threat"
+    EMERGENCY_MODE = "emergency_mode"
+    QUARANTINE = "quarantine"
+    PUBLIC_SAFETY = "public_safety"
+    INFRASTRUCTURE = "infrastructure"
+    EPIDEMIOLOGY = "epidemiology"
+    OTHER = "other"
+
+
+class ResolutionType(str, Enum):
+    ALL_CLEAR = "all_clear"
+    CANCEL = "cancel"
+    SUPERSEDED = "superseded"
+
+
 class SourceHealth(str, Enum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
@@ -40,6 +58,11 @@ class NormalizedEvent:
     payload: dict[str, Any] = field(default_factory=dict)
     expires_at: datetime | None = None
     resolved: bool = False
+    category: EventCategory | None = None
+    subtype: str | None = None
+    resolution_type: ResolutionType | None = None
+    replacement_event_id: str | None = None
+    replacement_source_id: str | None = None
     source_authority: str = "unknown"
     source_authority_score: float = 0.0
     def __post_init__(self) -> None:

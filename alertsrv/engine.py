@@ -9,7 +9,7 @@ from .geography import area_from_dict, areas_compatible
 from .hazards import classify_hazard
 from .keys import dedup_key
 from .source_authority import source_authority
-from .models import Alert, AlertState, Evidence, NormalizedEvent, SourceHealth
+from .models import Alert, AlertState, Evidence, NormalizedEvent, ResolutionType, SourceHealth
 from .storage import AlertStore
 
 
@@ -244,10 +244,10 @@ class AlertEngine:
         replacement reference therefore uses replacement_event_id plus an optional
         replacement_source_id. Missing references are deliberately not guessed.
         """
-        replacement_event_id = event.payload.get("replacement_event_id")
+        replacement_event_id = event.replacement_event_id or event.payload.get("replacement_event_id")
         if not replacement_event_id:
             return None
-        replacement_source_id = event.payload.get("replacement_source_id", event.source_id)
+        replacement_source_id = event.replacement_source_id or event.payload.get("replacement_source_id", event.source_id)
         replacement_key = dedup_key(replacement_event_id, replacement_source_id)
         replacement_alert_id = self._event_to_alert.get(replacement_key)
         if replacement_alert_id is None and self._store is not None:
@@ -267,12 +267,12 @@ class AlertEngine:
         if not event.resolved:
             return None
 
-        resolution_type = event.payload.get("resolution_type")
-        category = event.payload.get("category")
+        resolution_type = event.resolution_type.value if event.resolution_type else event.payload.get("resolution_type")
+        category = event.category.value if event.category else event.payload.get("category")
         if category in {"air_threat", "emergency_mode", "public_safety"}:
             if authority != "official_primary":
                 return None
-            if resolution_type not in {"all_clear", "cancel", "superseded"}:
+            if resolution_type not in {item.value for item in ResolutionType}:
                 return None
 
         if resolution_type == "all_clear":
