@@ -27,11 +27,15 @@ Completed:
 - dedicated Ivanovo operational-headquarters adapter for drone/missile danger and explicit all-clear events;
 - regional-government source catalog;
 - Ivanovo veterinary/quarantine registry adapter with affected-area extraction;
-- structured Rosgidromet hydrology adapter with current-bulletin discovery and explicit forecast expiry where available.
+- structured Rosgidromet hydrology adapter with current-bulletin discovery and explicit forecast expiry where available;
+- typed event lifecycle semantics with validation for safety-critical resolution and supersession metadata;
+- conservative contradiction semantics: a clear from one contributing source cannot resolve an aggregate while another contributing source remains uncleared;
+- explicit source-event supersession references with active replacement validation;
+- typed lifecycle metadata takes precedence over legacy payload metadata.
 
 Current verified state:
 
-- 97 automated tests pass;
+- 128 automated tests pass;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
 - Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;
@@ -64,12 +68,11 @@ The semantic taxonomy is documented in docs/PUBLIC_SAFETY_TAXONOMY.md.
 1. Extend source-authority mapping to additional source families as they are added.
 2. Extend geographic representation from region_code to a structured affected_area hierarchy:
    federal -> region -> municipality -> settlement -> local_area.
-3. Add contradiction and cancellation semantics for safety-critical warnings.
-4. Add notification delivery state and adapters.
-5. Add a small local UI showing active warnings by selected region and municipality.
-6. Add operational retention, backup/repair and schema migration procedures.
-7. Add broader national source coverage only after each source family has deterministic tests.
-8. Add source-specific freshness/degradation metadata where an adapter can distinguish:
+3. Add notification delivery state and adapters.
+4. Add a small local UI showing active warnings by selected region and municipality.
+5. Add operational retention, backup/repair and schema migration procedures.
+6. Add broader national source coverage only after each source family has deterministic tests.
+7. Add source-specific freshness/degradation metadata where an adapter can distinguish:
    successful empty result, stale upstream data, parser degradation, and transport failure.
 
 ## Safety-critical source policy
