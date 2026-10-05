@@ -10,7 +10,7 @@ import re
 
 from ..classification import classify_event
 from ..hazards import classify_hazard
-from ..models import EventCategory, NormalizedEvent, Severity
+from ..models import EventCategory, NormalizedEvent, ResolutionType, Severity
 from ..poller import SourceFetchResult
 
 GENERAL_RSS_TEMPLATE = (
@@ -94,7 +94,7 @@ class MchsRssAdapter:
         for item in channel.findall("item"):
             title = (item.findtext("title") or "").strip()
             link = (item.findtext("link") or "").strip()
-            if warnings_only and not any(word in title.lower() for word in (_WARNING_WORDS[0], _WARNING_WORDS[1], "warning", "storm")):
+            if warnings_only and not any(word in title.lower() for word in (_WARNING_WORDS[0], _WARNING_WORDS[1], "бпла", "ракетн", "warning", "storm")):
                 continue
             published = (item.findtext("pubDate") or "").strip()
             full_text = next((e.text or "" for e in item if e.tag.endswith("full-text")), "")
@@ -103,27 +103,42 @@ class MchsRssAdapter:
             received_at = parsedate_to_datetime(published)
             event_id = re.search(r"/(\d+)$", link)
             stable_id = event_id.group(1) if event_id else link
+            text = f"{title} {full_text}"
+            category, subtype = classify_event(text, event_type="weather.emergency_warning")
+            is_air_threat = category == "air_threat"
+            resolved = is_air_threat and bool(re.search(r"отбой|опасност[ьи].*отмен", text, re.I))
+            event_type = "public_safety.air_threat" if is_air_threat else "weather.emergency_warning"
+            region_code = "37" if self.source_id == "mchs-ivanovo" else self.source_id.removeprefix("mchs-")
+            correlation_key = (
+                f"region:{region_code}:air_threat:{subtype}"
+                if is_air_threat
+                else f"{self.source_id}:{stable_id}"
+            )
             yield NormalizedEvent(
                 event_id=stable_id,
                 source_id=self.source_id,
-                event_type="weather.emergency_warning",
+                event_type=event_type,
                 title=title,
-                severity=Severity.WARNING,
-                confidence=0.95,
+                severity=Severity.CRITICAL if is_air_threat else Severity.WARNING,
+                confidence=0.98 if is_air_threat else 0.95,
                 occurred_at=received_at,
                 received_at=received_at,
-                correlation_key=f"{self.source_id}:{stable_id}",
+                correlation_key=correlation_key,
                 payload={
                     "url": link,
                     "text_html": full_text,
-                    "region_code": self.source_id.removeprefix("mchs-"),
+                    "region_code": region_code,
                     "scope": "region",
-                    "hazard_class": classify_hazard(f"{title} {full_text}", event_type="weather.emergency_warning"),
+                    "hazard_class": classify_hazard(text, event_type=event_type),
                     "source_kind": "official_mchs",
-                    "category": classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[0],
-                    "subtype": classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[1],
+                    "category": category,
+                    "subtype": subtype,
+                    "resolved": resolved,
+                    "resolution_type": "all_clear" if resolved else None,
                 },
-                expires_at=_title_expiry(title, received_at.tzinfo),
-                category=EventCategory(classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[0]),
-                subtype=classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[1],
+                expires_at=None if is_air_threat else _title_expiry(title, received_at.tzinfo),
+                resolved=resolved,
+                category=EventCategory(category),
+                subtype=subtype,
+                resolution_type=ResolutionType.ALL_CLEAR if resolved else None,
             )
