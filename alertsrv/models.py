@@ -74,6 +74,26 @@ class NormalizedEvent:
             raise ValueError("source_authority_score must be between 0.0 and 1.0")
         if self.expires_at is not None and self.expires_at < self.occurred_at:
             raise ValueError("expires_at cannot precede occurred_at")
+        # Typed lifecycle semantics are validated when supplied. Legacy events
+        # that only carry payload metadata remain accepted for compatibility.
+        safety_categories = {
+            EventCategory.AIR_THREAT,
+            EventCategory.EMERGENCY_MODE,
+            EventCategory.QUARANTINE,
+            EventCategory.PUBLIC_SAFETY,
+        }
+        if self.category in safety_categories and self.resolved and self.resolution_type is None:
+            raise ValueError("safety-critical resolved events require resolution_type")
+        if self.replacement_event_id is not None and self.resolution_type is not ResolutionType.SUPERSEDED:
+            raise ValueError("replacement_event_id requires resolution_type=superseded")
+        if self.replacement_source_id is not None and self.replacement_event_id is None:
+            raise ValueError("replacement_source_id requires replacement_event_id")
+        if self.resolution_type is ResolutionType.SUPERSEDED and self.replacement_event_id is None:
+            raise ValueError("superseded events require replacement_event_id")
+        if self.resolution_type is ResolutionType.ALL_CLEAR and (
+            self.replacement_event_id is not None or self.replacement_source_id is not None
+        ):
+            raise ValueError("all_clear events cannot carry replacement references")
 
 @dataclass(frozen=True, slots=True)
 class Evidence:

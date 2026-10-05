@@ -34,7 +34,7 @@ class IvanovoOperationalHQTests(unittest.TestCase):
         self.assertEqual(events[1].payload["resolution_type"], "all_clear")
         self.assertEqual(events[0].correlation_key, events[1].correlation_key)
 
-    def test_safety_critical_clear_without_explicit_resolution_type_does_not_resolve(self):
+    def test_typed_safety_clear_survives_missing_legacy_payload_resolution_type(self):
         html = """<html><head><title>Информация оперативного штаба Ивановской области</title>
         <meta name="description" content="Обновление по состоянию на 06:33: Отбой опасности БПЛА.
         Обновление по состоянию на 05:40: В регионе сохраняется режим опасности БПЛА."></head></html>"""
@@ -47,7 +47,7 @@ class IvanovoOperationalHQTests(unittest.TestCase):
         engine = AlertEngine()
         alert = engine.ingest(events[0])
         engine.ingest(events[1])
-        self.assertEqual(alert.state.value, "active")
+        self.assertEqual(alert.state.value, "resolved")
 
     def test_safety_critical_unofficial_clear_does_not_resolve(self):
         html = """<html><head><title>Информация оперативного штаба Ивановской области</title>

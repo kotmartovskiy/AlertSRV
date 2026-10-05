@@ -257,5 +257,54 @@ class AlertEngineTests(unittest.TestCase):
             results = list(pool.map(engine.ingest, [incoming] * 32))
         self.assertEqual(len({alert.alert_id for alert in results}), 1)
         self.assertEqual(len(results[0].evidence), 1)
+    def test_typed_safety_clear_requires_resolution_type(self):
+        with self.assertRaises(ValueError):
+            NormalizedEvent(
+                event_id="typed-clear",
+                source_id="official-hq",
+                event_type="public_safety.air_threat",
+                title="Отбой",
+                severity=Severity.CRITICAL,
+                confidence=0.99,
+                occurred_at=T0,
+                received_at=T0,
+                correlation_key="air-threat",
+                resolved=True,
+                category=EventCategory.AIR_THREAT,
+            )
+
+    def test_typed_replacement_metadata_requires_superseded_semantics(self):
+        with self.assertRaises(ValueError):
+            NormalizedEvent(
+                event_id="bad-replacement",
+                source_id="official-hq",
+                event_type="public_safety.air_threat",
+                title="Replacement",
+                severity=Severity.CRITICAL,
+                confidence=0.99,
+                occurred_at=T0,
+                received_at=T0,
+                correlation_key="air-threat",
+                category=EventCategory.PUBLIC_SAFETY,
+                resolution_type=ResolutionType.ALL_CLEAR,
+                replacement_event_id="replacement",
+            )
+
+    def test_typed_superseded_event_requires_replacement_event(self):
+        with self.assertRaises(ValueError):
+            NormalizedEvent(
+                event_id="missing-replacement",
+                source_id="official-hq",
+                event_type="public_safety.air_threat",
+                title="Superseded",
+                severity=Severity.CRITICAL,
+                confidence=0.99,
+                occurred_at=T0,
+                received_at=T0,
+                correlation_key="air-threat",
+                category=EventCategory.PUBLIC_SAFETY,
+                resolution_type=ResolutionType.SUPERSEDED,
+            )
+
 if __name__ == "__main__":
     unittest.main()
