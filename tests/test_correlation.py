@@ -112,7 +112,7 @@ class CorrelationTests(unittest.TestCase):
             e.payload["affected_areas"] = [{"level": "settlement", "name": name, "municipality": "Лежневский район"}]
         self.assertIsNot(engine.ingest(first), engine.ingest(second))
 
-    def test_settlement_correlates_with_explicit_parent_municipality(self):
+    def test_settlement_and_parent_municipality_do_not_correlate(self):
         engine = AlertEngine()
         first = event("1", "mchs-37")
         first.payload["geography_precision"] = "settlement"
@@ -120,7 +120,7 @@ class CorrelationTests(unittest.TestCase):
         second = event("2", "ros-37", minutes=30)
         second.payload["geography_precision"] = "municipality"
         second.payload["affected_areas"] = [{"level": "municipality", "name": "Лежневский район"}]
-        self.assertIs(engine.ingest(first), engine.ingest(second))
+        self.assertIsNot(engine.ingest(first), engine.ingest(second))
 
     def test_different_farms_do_not_correlate_even_with_same_region(self):
         engine = AlertEngine()

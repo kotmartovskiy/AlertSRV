@@ -277,10 +277,10 @@ class AlertEngine:
                 return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("name")))
             if la == "settlement" and lb == "settlement":
                 return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("name")))
-            if la == "municipality" and lb == "settlement":
-                return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("municipality")))
-            if la == "settlement" and lb == "municipality":
-                return bool(norm(b.get("name")) and norm(b.get("name")) == norm(a.get("municipality")))
+            # Parent/child containment is intentionally not correlation.
+            # A municipality-wide warning and a settlement-specific warning
+            # may be spatially related, but they can represent different
+            # underlying situations and therefore keep separate alert lifecycles.
             return False
 
         return any(overlaps(a, b) for a in event_areas for b in evidence_areas)
