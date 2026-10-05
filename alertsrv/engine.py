@@ -5,6 +5,7 @@ from threading import RLock
 from uuid import uuid4
 
 from .freshness import Freshness, FreshnessPolicy
+from .geography import area_from_dict, areas_compatible
 from .hazards import classify_hazard
 from .keys import dedup_key
 from .source_authority import source_authority
@@ -274,25 +275,18 @@ class AlertEngine:
         if not event_areas or not evidence_areas:
             return False
 
-        def norm(value: object) -> str:
-            return str(value).strip().casefold() if value is not None else ""
-
-        def overlaps(a: dict, b: dict) -> bool:
-            la, lb = a.get("level"), b.get("level")
-            if la == "farm" and lb == "farm":
-                ca, cb = norm(a.get("cadastral_number")), norm(b.get("cadastral_number"))
-                return bool(ca and cb and ca == cb)
-            if la == "municipality" and lb == "municipality":
-                return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("name")))
-            if la == "settlement" and lb == "settlement":
-                return bool(norm(a.get("name")) and norm(a.get("name")) == norm(b.get("name")))
-            # Parent/child containment is intentionally not correlation.
-            # A municipality-wide warning and a settlement-specific warning
-            # may be spatially related, but they can represent different
-            # underlying situations and therefore keep separate alert lifecycles.
+        try:
+            normalized_event_areas = [area_from_dict(area) for area in event_areas]
+            normalized_evidence_areas = [area_from_dict(area) for area in evidence_areas]
+        except (TypeError, ValueError, KeyError):
+            # Malformed legacy geography must never create a false correlation.
             return False
 
-        return any(overlaps(a, b) for a in event_areas for b in evidence_areas)
+        return any(
+            areas_compatible(left, right)
+            for left in normalized_event_areas
+            for right in normalized_evidence_areas
+        )
 
     @staticmethod
     def _transition(alert: Alert, new_state: AlertState, at: datetime, reason: str) -> None:
