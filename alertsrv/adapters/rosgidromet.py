@@ -91,6 +91,7 @@ class RosgidrometEmergencyAdapter:
                 correlation_key=f"{self.source_id}:{stable}",
                 payload={"url": self.url, "text": body, "scope": "russia",
                          "hazard_class": classify_hazard(body, event_type="weather.emergency_national"),
+                         "source_kind": "official_rosgidromet_emergency",
                          "category": category, "subtype": subtype},
                 category=EventCategory(category),
                 subtype=subtype,

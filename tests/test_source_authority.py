@@ -8,6 +8,7 @@ class SourceAuthorityTests(unittest.TestCase):
         for kind in (
             "official_regional_operational_hq",
             "official_rosgidromet_hydrology",
+            "official_rosgidromet_emergency",
             "veterinary_service_npa",
             "official_mchs",
         ):

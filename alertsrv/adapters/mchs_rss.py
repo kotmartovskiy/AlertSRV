@@ -114,6 +114,7 @@ class MchsRssAdapter:
                     "region_code": self.source_id.removeprefix("mchs-"),
                     "scope": "region",
                     "hazard_class": classify_hazard(f"{title} {full_text}", event_type="weather.emergency_warning"),
+                    "source_kind": "official_mchs",
                     "category": classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[0],
                     "subtype": classify_event(f"{title} {full_text}", event_type="weather.emergency_warning")[1],
                 },

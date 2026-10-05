@@ -31,11 +31,12 @@ Completed:
 - typed event lifecycle semantics with validation for safety-critical resolution and supersession metadata;
 - conservative contradiction semantics: a clear from one contributing source cannot resolve an aggregate while another contributing source remains uncleared;
 - explicit source-event supersession references with active replacement validation;
-- typed lifecycle metadata takes precedence over legacy payload metadata.
+- typed lifecycle metadata takes precedence over legacy payload metadata;
+- poll-batch validation prevents adapter source-identity/freshness errors from partially mutating alert state.
 
 Current verified state:
 
-- 128 automated tests pass;
+- 129 automated tests pass;
 - official Ivanovo air-threat source is parsed for warning and all-clear messages;
 - official veterinary/quarantine publications preserve municipality/settlement/farm details when present;
 - Rosgidromet hydrology discovery selects the newest non-future bulletin and rejects stale bulletins;

@@ -31,6 +31,7 @@ _POLICIES = {
 _SOURCE_KIND_POLICIES = {
     "official_regional_operational_hq": SourceAuthority.OFFICIAL_PRIMARY,
     "official_rosgidromet_hydrology": SourceAuthority.OFFICIAL_PRIMARY,
+    "official_rosgidromet_emergency": SourceAuthority.OFFICIAL_PRIMARY,
     "veterinary_service_npa": SourceAuthority.OFFICIAL_PRIMARY,
     "official_mchs": SourceAuthority.OFFICIAL_PRIMARY,
     "official_regional_government": SourceAuthority.OFFICIAL_PRIMARY,
